@@ -49,3 +49,22 @@ int Queue_Dequeue(queue_t *q) {
 
   return val;
 }
+
+int main() {
+  queue_t myQueue;
+  Queue_init(&myQueue); // Initialize the queue
+
+  // Test enqueue
+  Queue_Enqueue(&myQueue, 10); // Enqueue value 10
+  Queue_Enqueue(&myQueue, 20); // Enqueue value 20
+
+  // Test dequeue
+  int firstValue = Queue_Dequeue(&myQueue);  // Should dequeue value 10
+  int secondValue = Queue_Dequeue(&myQueue); // Should dequeue value 20
+  int emptyDequeue =
+      Queue_Dequeue(&myQueue); // Should return -1 as queue is empty
+
+  printf("First dequeued value: %d\n", firstValue);
+  printf("Second dequeued value: %d\n", secondValue);
+  printf("Dequeue on empty queue: %d\n", emptyDequeue);
+}

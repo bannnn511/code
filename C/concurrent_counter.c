@@ -48,3 +48,20 @@ int get(counter_t *c) {
 
   return val;
 }
+
+int main() {
+  counter_t myCounter;
+  init(&myCounter, 5); // Initialize with a threshold of 10
+
+  update(&myCounter, 0, 5); // Update thread 0 with value 5
+  update(&myCounter, 1, 3); // Update thread 1 with value 3
+  update(&myCounter, 0,
+         6); // Update thread 0 with value 6, should trigger a global update
+
+  // Test get
+  int globalCount = get(&myCounter);
+  printf("Global count after updates: %d\n",
+         globalCount); // Should print the global count
+
+  return 0;
+}
