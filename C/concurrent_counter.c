@@ -1,7 +1,13 @@
+#include "errno.h"
+#include "util.h"
+#include <math.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
-const int NUMCPUS = 2;
+#define NUMCPUS 6
+#define ONE_MILLION 1000000
 
 typedef struct counter_t {
   int global;                      // global count
@@ -19,6 +25,7 @@ void init(counter_t *c, int threshold) {
   pthread_mutex_init(&c->glock, NULL);
   int i;
   for (i = 0; i < NUMCPUS; i++) {
+    c->locals[i] = 0;
     pthread_mutex_init(&c->llocks[i], NULL);
   }
 }
@@ -49,19 +56,64 @@ int get(counter_t *c) {
   return val;
 }
 
+typedef struct __myarg_t {
+  counter_t *c;
+  int threshold;
+  int amt;
+  int threads;
+  char pad[sizeof(counter_t *) - sizeof(int)];
+} myarg_t;
+
+void *thread_function(void *arg) {
+  myarg_t *m = (myarg_t *)(arg);
+  for (int i = 0; i < ONE_MILLION; i++)
+    update(m->c, m->threads, m->amt);
+  pthread_exit(0);
+}
+
 int main() {
-  counter_t myCounter;
-  init(&myCounter, 5); // Initialize with a threshold of 10
+  for (int i = 0; i < 10; i++) {
+    double threshold = pow(2, i);
+    for (int j = 1; j < NUMCPUS; j++) {
+      counter_t *c = malloc(sizeof(counter_t));
+      if (c == NULL) {
+        handle_error(errno, "malloc");
+      }
+      init(c, threshold);
 
-  update(&myCounter, 0, 5); // Update thread 0 with value 5
-  update(&myCounter, 1, 3); // Update thread 1 with value 3
-  update(&myCounter, 0,
-         6); // Update thread 0 with value 6, should trigger a global update
+      pthread_t *threads = malloc((size_t)j * sizeof(pthread_t));
+      if (threads == NULL) {
+        handle_error(errno, "malloc");
+      }
+      myarg_t args;
+      args.c = c;
+      args.threshold = (int)threshold;
+      args.amt = 1;
+      args.threads = j;
 
-  // Test get
-  int globalCount = get(&myCounter);
-  printf("Global count after updates: %d\n",
-         globalCount); // Should print the global count
+      clock_t startTime = (float)clock() / CLOCKS_PER_SEC;
+
+      for (int k = 0; k < j; k++) {
+        pthread_create(&threads[k], NULL, thread_function, &args);
+      }
+
+      for (int k = 0; k < j; k++) {
+        pthread_join(threads[k], NULL);
+      }
+      clock_t endTime = (float)clock() / CLOCKS_PER_SEC;
+      printf("%d threads, %d threshold\n", j, (int)threshold);
+      printf("%d global counter\n", get(c));
+      printf("Time (seconds): %f\n\n",
+             ((double)(endTime - startTime) / ONE_MILLION));
+
+      pthread_mutex_destroy(&c->glock);
+      for (int m = 0; m < NUMCPUS; m++)
+        pthread_mutex_destroy(&c->llocks[m]);
+
+      free(c);
+      free(threads);
+    }
+  }
 
   return 0;
 }
