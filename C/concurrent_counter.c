@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define NUMCPUS 6
+#define NUMCPUS 4
 #define ONE_MILLION 1000000
 
 typedef struct counter_t {
@@ -91,8 +91,9 @@ int main() {
       args.amt = 1;
       args.threads = j;
 
-      clock_t startTime = (float)clock() / CLOCKS_PER_SEC;
-
+      struct timespec start, end;
+      clock_gettime(CLOCK_MONOTONIC,
+                    &start); // Use clock_gettime instead of clock()
       for (int k = 0; k < j; k++) {
         pthread_create(&threads[k], NULL, thread_function, &args);
       }
@@ -100,11 +101,15 @@ int main() {
       for (int k = 0; k < j; k++) {
         pthread_join(threads[k], NULL);
       }
-      clock_t endTime = (float)clock() / CLOCKS_PER_SEC;
+
+      clock_gettime(CLOCK_MONOTONIC,
+                    &end); // Use clock_gettime instead of clock()me =
+      double time_taken = end.tv_sec - start.tv_sec;
+      time_taken +=
+          (end.tv_nsec - start.tv_nsec) / 1e9; // Convert nanoseconds to seconds
       printf("%d threads, %d threshold\n", j, (int)threshold);
       printf("%d global counter\n", get(c));
-      printf("Time (seconds): %f\n\n",
-             ((double)(endTime - startTime) / ONE_MILLION));
+      printf("Time (seconds): %f\n\n", time_taken);
 
       pthread_mutex_destroy(&c->glock);
       for (int m = 0; m < NUMCPUS; m++)
