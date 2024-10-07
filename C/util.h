@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #define handle_error(en, msg)                                                  \
   do {                                                                         \
     errno = en;                                                                \
