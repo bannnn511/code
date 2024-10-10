@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "errno.h"
 
 #define handle_error(en, msg)                                                  \
   do {                                                                         \
