@@ -1,3 +1,10 @@
+/*
+Resources:
+    - https://github.com/kevin-wayne/algs4/blob/master/src/main/java/edu/princeton/cs/algs4/BTree.java#L203
+    - https://eatonphil.com/btrees.html
+ */
+
+
 #include "util.h"
 
 // max children per B-tree node = M-1
@@ -11,6 +18,7 @@ typedef struct entry
 {
     char* key;
     char* value;
+    struct node* next;
 } entry;
 
 typedef struct node
@@ -26,10 +34,12 @@ typedef struct btree
     int n; // number of key-value pairs in the B-tree
 } btree;
 
-static entry* init_entry(entry* e, char* key, char* value)
+static entry* init_entry(entry* e, char* key, char* value, node* next)
 {
     e->key = key;
     e->value = value;
+    e->next = next;
+
     return e;
 }
 
@@ -43,7 +53,7 @@ static node* init_node(node* n, int k)
         {
             handle_error(errno, "malloc");
         }
-        init_entry(e, NULL, NULL);
+        init_entry(e, NULL, NULL, NULL);
         n->children[i] = e;
     }
     n->n = k;
@@ -78,27 +88,31 @@ static void free_btree(btree* bt)
 }
 
 
-static int* search(btree* bt, char* key, int ht)
+static char* search(node* n, char* key, int ht)
 {
-    entry* children = bt->root->children;
+    entry* children[M];
+    for (int i = 0; i < M; i++)
+    {
+        children[i] = n->children[i];
+    }
 
     if (ht == 0)
     {
-        for (int i = 0; i < bt->n; i++)
+        for (int i = 0; i < n->n; i++)
         {
-            if (strcmp(children[i].key, key) == 0)
+            if (strcmp(children[i]->key, key) == 0)
             {
-                return &children[i].value;
+                return children[i]->value;
             }
         }
     }
     else
     {
-        for (int i = 0; i < bt->n; i++)
+        for (int i = 0; i < n->n; i++)
         {
-            if (i + 1 == bt->n || strcmp(bt->root->children[i + 1]->key, key) < 0)
+            if (i + 1 == n->n || strcmp(children[i + 1]->key, key) < 0)
             {
-                return search(bt, key, ht - 1);
+                return search(children[i]->next, key, ht - 1);
             }
         }
     }
@@ -106,9 +120,9 @@ static int* search(btree* bt, char* key, int ht)
     return NULL;
 }
 
-int* get(btree* bt, char* key)
+char* get(btree* bt, char* key)
 {
-    return search(bt, key, bt->height);
+    return search(bt->root, key, bt->height);
 }
 
 static node* split(node* n)
@@ -116,11 +130,11 @@ static node* split(node* n)
     node* h = malloc(sizeof(node));
     if (h == NULL)
         handle_error(errno, "malloc");
-
-    h->n = M / 2;
+    n->n = M / 2;
+    init_node(h, M / 2);
     for (int j = 0; j < h->n; j++)
     {
-        h->children[j] = h->children[M / 2 + j];
+        h->children[j] = n->children[M / 2 + j];
     }
 
     return h;
@@ -134,12 +148,14 @@ static node* insert(node* h, char* key, char* value, int ht)
     {
         handle_error(errno, "malloc");
     }
+    init_entry(e, key, value,NULL);
 
     if (ht == 0)
     {
         for (j = 0; j < h->n; j++)
         {
-            if (strcmp(h->children[j]->key, key) <= 0) break;
+            int cmp = strcmp(key, h->children[j]->key);
+            if (cmp < 0) break;
         }
     }
     else
@@ -152,10 +168,11 @@ static node* insert(node* h, char* key, char* value, int ht)
                 if (u == NULL)
                     handle_error(errno, "malloc");
 
-                u = insert(u, key, value, ht - 1);
+                u = insert(h->children[j++]->next, key, value, ht - 1);
                 if (u == NULL) return NULL;
 
                 e->key = u->children[0]->key;
+                e->next = u;
                 break;
             }
         }
@@ -193,7 +210,7 @@ void put(btree* bt, char* key, char* value)
     {
         handle_error(errno, "malloc");
     }
-    init_entry(entry1, bt->root->children[0]->key, value);
+    init_entry(entry1, bt->root->children[0]->key, value, bt->root);
     t->children[0] = entry1;
 
     entry* entry2 = malloc(sizeof(entry));
@@ -201,39 +218,104 @@ void put(btree* bt, char* key, char* value)
     {
         handle_error(errno, "malloc");
     }
-    init_entry(entry2, newnode->children[0]->key, value);
+
+    init_entry(entry2, newnode->children[0]->key, value, newnode);
+    t->children[1] = entry2;
+
     bt->root = t;
     bt->height++;
+}
+
+static char* to_string(node* h, int ht, char* indent)
+{
+    char* s = malloc(1024 * sizeof(char));
+    entry* children[M];
+    for (size_t i = 0; i < M; i++)
+    {
+        children[i] = h->children[i];
+    }
+
+    if (ht == 0)
+    {
+        for (int j = 0; j < h->n; j++)
+        {
+            strcat(s, indent);
+            strcat(s, children[j]->key);
+            strcat(s, " ");
+            if (children[j]->value == NULL)
+            {
+                strcat(s, "null");
+            }
+            else
+            {
+                strcat(s, children[j]->value);
+            }
+            strcat(s, "\n");
+        }
+    }
+    else
+    {
+        for (int j = 0; j < h->n; j++)
+        {
+            if (j > 0)
+            {
+                strcat(s, indent);
+                strcat(s, "(");
+                strcat(s, children[j]->key);
+                strcat(s, ")\n");
+            }
+            char* intentCp = malloc(1024 * sizeof(char));
+            strcpy(intentCp, indent);
+            strcat(intentCp, "     ");
+            strcat(s, to_string(children[j]->next, ht - 1, intentCp));
+        }
+    }
+    return s;
+}
+
+
+char* tree_to_string(btree t)
+{
+    return to_string(t.root, t.height, " ");
 }
 
 
 int main(int argc, char* argv[])
 {
-    btree* btree = malloc(sizeof(btree));
-    if (btree == NULL)
+    btree* bt = malloc(sizeof(btree));
+    if (bt == NULL)
     {
         handle_error(errno, "malloc");
     }
 
-    init_btree(btree);
-    put(btree, "www.cs.princeton.edu", "128.112.136.12");
-    put(btree, "www.cs.princeton.edu", "128.112.136.11");
-    put(btree, "www.cs.princeton.edu", NULL);
-    put(btree, "www.princeton.edu", "128.112.128.15");
-    put(btree, "www.yale.edu", "130.132.143.21");
-    put(btree, "www.simpsons.com", "209.052.165.60");
-    put(btree, "www.apple.com", "17.112.152.32");
-    put(btree, "www.amazon.com", "207.171.182.16");
-    put(btree, "www.ebay.com", "66.135.192.87");
-    put(btree, "www.cnn.com", "64.236.16.20");
-    put(btree, "www.google.com", "216.239.41.99");
-    put(btree, "www.nytimes.com", "199.239.136.200");
-    put(btree, "www.microsoft.com", "207.126.99.140");
-    put(btree, "www.dell.com", "143.166.224.230");
-    put(btree, "www.slashdot.org", "66.35.250.151");
-    put(btree, "www.espn.com", "199.181.135.201");
-    put(btree, "www.weather.com", "63.111.66.11");
-    put(btree, "www.yahoo.com", "216.109.118.65");
+    init_btree(bt);
+    put(bt, "a", "1");
+    put(bt, "b", "2");
+    put(bt, "c", "3");
+    put(bt, "d", "4");
+    put(bt, "e", "5");
+    put(bt, "f", "6");
+    // put(bt, "www.cs.princeton.edu", "128.112.136.12");
+    // put(bt, "www.cs.princeton.edu", "128.112.136.11");
+    // put(bt, "www.cs.princeton.edu", NULL);
+    // put(bt, "www.princeton.edu", "128.112.128.15");
+    // put(bt, "www.yale.edu", "130.132.143.21");
+    // put(bt, "www.simpsons.com", "209.052.165.60");
+    // put(bt, "www.apple.com", "17.112.152.32");
+    // put(bt, "www.amazon.com", "207.171.182.16");
+    // put(bt, "www.ebay.com", "66.135.192.87");
+    // put(bt, "www.cnn.com", "64.236.16.20");
+    // put(bt, "www.google.com", "216.239.41.99");
+    // put(bt, "www.nytimes.com", "199.239.136.200");
+    // put(bt, "www.microsoft.com", "207.126.99.140");
+    // put(bt, "www.dell.com", "143.166.224.230");
+    // put(bt, "www.slashdot.org", "66.35.250.151");
+    // put(bt, "www.espn.com", "199.181.135.201");
+    // put(bt, "www.weather.com", "63.111.66.11");
+    // put(bt, "www.yahoo.com", "216.109.118.65");
 
-    free_btree(btree);
+    printf("size:      %d\n", bt->n);
+    printf("height:    %d\n", bt->height);
+    printf("%s\n", tree_to_string(*bt));
+    free_btree(bt);
 }

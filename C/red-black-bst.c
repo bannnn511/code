@@ -89,27 +89,6 @@ static node* rotate_right(node* n)
   return x;
 }
 
-static node* min(node* x)
-{
-  if (x == NULL)
-    return NULL;
-
-  if (x->left == NULL)
-    return x;
-
-  return min(x->left);
-}
-
-static node* max(node* x)
-{
-  if (x == NULL)
-    return NULL;
-  if (x->right == NULL)
-    return x;
-
-  return max(x->right);
-}
-
 static void flip_colors(node* n)
 {
   n->color = RED;
