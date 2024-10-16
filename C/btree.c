@@ -295,15 +295,14 @@ static void *thread_function(void *args) {
 
 int main(int argc, char *argv[]) {
     for (int i = 1; i < 11; i++) {
-        btree *btree = malloc(sizeof(btree));
-        if (btree == NULL) {
+        btree *bt = malloc(sizeof(btree));
+        if (bt == NULL) {
             handle_error(errno, "malloc");
         }
-        init_btree(btree);
+        init_btree(bt);
 
-        int s = 0;
         myarg args;
-        args.btree = btree;
+        args.btree = bt;
         args.threads = i;
         pthread_t *threads = malloc((size_t) i * sizeof(pthread_t));
         if (threads == NULL)
@@ -313,8 +312,6 @@ int main(int argc, char *argv[]) {
         clock_gettime(CLOCK_MONOTONIC,
                       &start); // Use clock_gettime instead of clock()
 
-        if (s != 0)
-            handle_error(s, "gettimeofday");
         for (int j = 0; j < i; j++)
             pthread_create(&threads[j], NULL, &thread_function, &args);
         for (int k = 0; k < i; k++)
@@ -322,8 +319,6 @@ int main(int argc, char *argv[]) {
 
         clock_gettime(CLOCK_MONOTONIC,
                       &end); // Use clock_gettime instead of clock()
-        if (s != 0)
-            handle_error(s, "gettimeofday");
 
         double time_taken = end.tv_sec - start.tv_sec;
         time_taken +=
@@ -331,9 +326,9 @@ int main(int argc, char *argv[]) {
 
         printf("%d threads\n", i);
         printf("Time (seconds): %f\n\n", time_taken);
-        printf("size: %d\n\n", btree->n);
+        printf("size: %d\n\n", bt->n);
 
-        free(btree);
+        free(bt);
         free(threads);
     }
 
