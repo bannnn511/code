@@ -5,13 +5,17 @@ https://github.com/kevin-wayne/algs4/blob/master/src/main/java/edu/princeton/cs/
     - https://eatonphil.com/btrees.html
  */
 
+#include <pthread.h>
+
 #include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/_pthread/_pthread_mutex_t.h>
 
 // max children per B-tree node = M-1
 #define M 4
+#define ONE_MILLION 1000000
 
 typedef struct entry {
     char *key;
@@ -28,6 +32,7 @@ typedef struct btree {
     node *root; // root of the B-tree
     int height; // height of the B-tree
     int n; // number of key-value pairs in the B-tree
+    pthread_mutex_t lock;
 } btree;
 
 static entry *init_entry(entry *e, char *key, char *value, node *next) {
@@ -66,6 +71,7 @@ static void init_btree(btree *bt) {
     }
 
     bt->root = init_node(root, 0);
+    pthread_mutex_init(&bt->lock, NULL);
 }
 
 static void free_btree(btree *bt) {
@@ -222,9 +228,11 @@ static char *to_string(node *h, int ht, char *indent) {
     return s;
 }
 
-char *tree_to_string(btree t) { return to_string(t.root, t.height, " "); }
+char *tree_to_string(btree t) {
+    return to_string(t.root, t.height, " ");
+}
 
-int main(int argc, char *argv[]) {
+void test_btree() {
     btree *bt = malloc(sizeof(btree));
     if (bt == NULL) {
         handle_error(errno, "malloc");
@@ -252,7 +260,9 @@ int main(int argc, char *argv[]) {
 
     printf("size:      %d\n", bt->n);
     printf("height:    %d\n", bt->height);
-    printf("%s\n", tree_to_string(*bt));
+    char *tree = tree_to_string(*bt);
+    printf("%s\n", tree);
+    free(tree);
 
     char *test1 = get(bt, "www.princeton.edu");
     char *test2 = get(bt, "www.espn.com");
@@ -261,6 +271,71 @@ int main(int argc, char *argv[]) {
     printf("%s\n", test2);
 
     free_btree(bt);
+}
+
+typedef struct myarg {
+    btree *btree;
+    int threads;
+} myarg;
+
+static void *thread_function(void *args) {
+    myarg *m = (myarg *) args;
+    char *urls[] = {
+        "www.cs.princeton.edu", "www.princeton.edu", "www.yale.edu",
+        "www.simpsons.com", "www.apple.com", "www.amazon.com",
+        "www.ebay.com", "www.cnn.com", "www.google.com",
+        "www.nytimes.com", "www.microsoft.com"
+    };
+    pthread_mutex_lock(&m->btree->lock);
+    for (int i = 0; i < 100 / m->threads; i++)
+        put(m->btree, urls[i % 11], "128.112.136.12");
+    pthread_mutex_unlock(&m->btree->lock);
+    pthread_exit(EXIT_SUCCESS);
+}
+
+int main(int argc, char *argv[]) {
+    for (int i = 1; i < 11; i++) {
+        btree *btree = malloc(sizeof(btree));
+        if (btree == NULL) {
+            handle_error(errno, "malloc");
+        }
+        init_btree(btree);
+
+        int s = 0;
+        myarg args;
+        args.btree = btree;
+        args.threads = i;
+        pthread_t *threads = malloc((size_t) i * sizeof(pthread_t));
+        if (threads == NULL)
+            handle_error(errno, "malloc");
+
+        struct timespec start, end;
+        clock_gettime(CLOCK_MONOTONIC,
+                      &start); // Use clock_gettime instead of clock()
+
+        if (s != 0)
+            handle_error(s, "gettimeofday");
+        for (int j = 0; j < i; j++)
+            pthread_create(&threads[j], NULL, &thread_function, &args);
+        for (int k = 0; k < i; k++)
+            pthread_join(threads[k], NULL);
+
+        clock_gettime(CLOCK_MONOTONIC,
+                      &end); // Use clock_gettime instead of clock()
+        if (s != 0)
+            handle_error(s, "gettimeofday");
+
+        double time_taken = end.tv_sec - start.tv_sec;
+        time_taken +=
+                (end.tv_nsec - start.tv_nsec) / 1e9; // Convert nanoseconds to seconds
+
+        printf("%d threads\n", i);
+        printf("Time (seconds): %f\n\n", time_taken);
+        printf("size: %d\n\n", btree->n);
+
+        free(btree);
+        free(threads);
+    }
 
     return 0;
 }
