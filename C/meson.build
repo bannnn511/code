@@ -9,6 +9,6 @@ concurrent_queue = executable('concurrent_queue', 'concurrent-queue.c', install 
 hand_over_hand_linked_list = executable('hand-over-hand-linked-list', 'hand-over-hand-linked-list.c', install : true)
 red_black_bst = executable('red-black-bst', 'red-black-bst.c', install : true)
 btree = executable('btree', 'btree.c', install : true)
-
+cond_var = executable('cond_var', 'conditional_variable.c', install : true)
 
 test('test', C)
