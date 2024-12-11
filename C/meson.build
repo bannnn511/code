@@ -13,5 +13,6 @@ cond_var = executable('cond_var', 'conditional_variable.c', install : true)
 producer_consumer = executable('producer_consumer', 'producer_consumer.c', install : true)
 reader_writer = executable('reader_writer', 'reader_writer.c', install : true)
 fork_join = executable('fork_join', ['fork_join.c', 'zemaphore.c'], install : true)
+rendezvous = executable('rendezvous', 'rendezvous.c', install : true)
 
 test('test', C)
