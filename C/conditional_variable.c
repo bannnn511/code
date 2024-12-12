@@ -1,5 +1,6 @@
 #include <pthread.h>
 #include <stdio.h>
+#include <time.h>
 
 // START: wait and signal
 int done = 0;

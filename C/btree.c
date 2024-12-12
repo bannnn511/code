@@ -5,13 +5,13 @@ https://github.com/kevin-wayne/algs4/blob/master/src/main/java/edu/princeton/cs/
     - https://eatonphil.com/btrees.html
  */
 
+#define _POSIX_C_SOURCE 199309L
+#include <time.h>
 #include <pthread.h>
-
 #include "util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/_pthread/_pthread_mutex_t.h>
 
 // max children per B-tree node = M-1
 #define M 4

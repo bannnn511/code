@@ -1,9 +1,10 @@
+#define _POSIX_C_SOURCE 199309L
+#include <time.h>
 #include "errno.h"
 #include "util.h"
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 
 #define NUMCPUS 10
 #define ONE_MILLION 1000000

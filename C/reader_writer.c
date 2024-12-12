@@ -1,7 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/_pthread/_pthread_t.h>
 #include <unistd.h>
 
 #include "common_threads.h"
@@ -20,14 +19,14 @@ typedef struct __rwlock_t {
 
 void rwlock_init(rwlock_t *rw) {
   rw->readers = 0;
-  zem_init(&rw->lock, 0);
-  zem_init(&rw->writelock, 0);
+  zem_init(&rw->lock, 1);
+  zem_init(&rw->writelock, 1);
 }
 
 void rwlock_acquire_readlock(rwlock_t *rw) {
   zem_wait(&rw->lock);
   rw->readers++;
-  if (rw->readers > 1) {
+  if (rw->readers == 1) {
     zem_wait(&rw->writelock);
   }
   zem_post(&rw->lock);
@@ -69,7 +68,6 @@ void *writer(void *arg) {
   int i;
   for (i = 0; i < loops; i++) {
     rwlock_acquire_writelock(&lock);
-    printf("here");
     value++;
     printf("write %d\n", value);
     rwlock_release_writelock(&lock);
