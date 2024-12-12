@@ -1,6 +1,8 @@
 #include "util.h"
+#include <assert.h>
 #include <errno.h>
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #define ONE_MILLION 1000000
@@ -102,6 +104,7 @@ void *thread_function(void *args) {
 }
 
 int main(int argc, char *argv[]) {
+  assert(argc == 2);
 
   int list_length = atoi(argv[1]);
   int thread_count = atoi(argv[2]);
@@ -110,12 +113,12 @@ int main(int argc, char *argv[]) {
   if (list == NULL) {
     handle_error(errno, "malloc");
   }
+  List_Init(list);
 
   for (int i = 0; i < list_length; i++)
     List_Insert(list, i);
 
   for (int i = 1; i <= thread_count; i++) {
-    int s = 0;
     struct timespec start, end;
 
     pthread_t *threads = malloc((size_t)i * sizeof(pthread_t));

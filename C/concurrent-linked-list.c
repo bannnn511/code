@@ -1,6 +1,7 @@
 #include "util.h"
 #include <errno.h>
 #include <pthread.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #define ONE_MILLION 1000000

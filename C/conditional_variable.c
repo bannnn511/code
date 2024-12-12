@@ -1,8 +1,3 @@
-//
-// Created by ban on 3/12/24.
-//
-
-#include <assert.h>
 #include <pthread.h>
 #include <stdio.h>
 
@@ -37,8 +32,9 @@ void thr_join() {
 
 // START: bounded buffer
 
-int MAX = 100;
-int buffer[MAX];
+#define MAX 100;
+
+int buffer[100];
 int fill_ptr = 0;
 int use_ptr = 0;
 int count = 0;
@@ -57,7 +53,6 @@ int get() {
   return tmp;
 }
 
-
 int loops;
 pthread_cond_t empty, fill;
 pthread_mutex_t mutex;
@@ -72,6 +67,8 @@ void *producer(void *arg) {
     pthread_cond_signal(&fill);
     pthread_mutex_unlock(&mutex);
   }
+
+  return NULL;
 }
 
 void *consumer(void *arg) {
@@ -85,6 +82,8 @@ void *consumer(void *arg) {
     pthread_mutex_unlock(&m);
     printf("%d\n", tmp);
   }
+
+  return NULL;
 }
 
 // END: bounded buffer
