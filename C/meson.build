@@ -14,5 +14,6 @@ producer_consumer = executable('producer_consumer', 'producer_consumer.c', insta
 reader_writer = executable('reader_writer', 'reader_writer.c', install : true)
 fork_join = executable('fork_join', 'fork_join.c', install : true)
 rendezvous = executable('rendezvous', 'rendezvous.c', install : true)
+barrier = executable('barrier', 'barrier.c', install : true)
 
 test('test', C)
