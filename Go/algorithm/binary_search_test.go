@@ -162,7 +162,7 @@ func BenchmarkSearchInts2(b *testing.B) {
 	}
 }
 
-func TestSmallestValue(t *testing.T) {
+func TestSmallestSolution(t *testing.T) {
 	type args struct {
 		a []int
 		x int
@@ -173,18 +173,89 @@ func TestSmallestValue(t *testing.T) {
 		want int
 	}{
 		{
-			name: "Test case 1",
+			name: "1. Find k where arr[k] > 5",
 			args: args{
 				a: []int{1, 2, 3, 5, 5, 5, 7, 8, 9},
 				x: 5,
 			},
+			want: 6,
+		},
+		{
+			name: "1. Find k where arr[k] > 3",
+			args: args{
+				a: []int{1, 2, 3, 5, 5, 5, 7, 8, 9},
+				x: 3,
+			},
 			want: 3,
+		},
+		{
+			name: "1. Find k where arr[k] > 8",
+			args: args{
+				a: []int{1, 2, 3, 5, 5, 5, 7, 8, 9},
+				x: 8,
+			},
+			want: 8,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := SmallestValue(tt.args.a, tt.args.x); got != tt.want {
+			if got := FindSmallestSolution(tt.args.a, tt.args.x); got != tt.want {
+				t.Errorf("SmallestValue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMaximumValue(t *testing.T) {
+	type args struct {
+		a []int
+	}
+	tests := []struct {
+		name string
+		args args
+		want int
+	}{
+		{
+			name: "1. Find 60",
+			args: args{
+				a: []int{1, 10, 20, 30, 40, 50, 60, 55, 45, 35, 25, 15, 5},
+			},
+			want: 6,
+		},
+		{
+			name: "2. Find 55",
+			args: args{
+				a: []int{1, 10, 20, 30, 40, 50, 53, 55, 45, 35, 25, 15, 5},
+			},
+			want: 7,
+		},
+		{
+			name: "3. Find 10",
+			args: args{
+				a: []int{1, 10, 8, 7, 6},
+			},
+			want: 1,
+		},
+		{
+			name: "4. Find 10",
+			args: args{
+				a: []int{10, 8, 7, 6},
+			},
+			want: 0,
+		},
+		{
+			name: "5. Find 20",
+			args: args{
+				a: []int{0, 1, 12, 15, 20},
+			},
+			want: 4,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FindMaximumValue(tt.args.a); got != tt.want {
 				t.Errorf("SmallestValue() = %v, want %v", got, tt.want)
 			}
 		})
