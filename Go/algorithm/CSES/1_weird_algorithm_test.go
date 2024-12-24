@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -41,8 +42,16 @@ func ReadInts(t *testing.T) []int {
 func Test_weirdAlgorithm(t *testing.T) {
 	tests := ReadInts(t)
 	for i, tt := range tests {
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
-			weirdAlgorithm(tt)
+		t.Run(fmt.Sprintf("tests/%d.out", i+1), func(t *testing.T) {
+			outByte, err := os.ReadFile(fmt.Sprintf("tests/%d.out", i+1))
+			out := strings.TrimSpace(string(outByte))
+			if err != nil {
+				t.Fatalf(err.Error())
+			}
+			got := weirdAlgorithm(tt)
+			if strings.Compare(got, out) != 0 {
+				t.Fatalf("\nwirldAlgorithm() = %v, \nwant %s", got, out)
+			}
 		})
 	}
 }
