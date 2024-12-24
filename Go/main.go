@@ -6,6 +6,7 @@ import (
 )
 
 func main() {
+	fmt.Println("===", 2&2)
 	start := time.Now()
 	arr := []int{1, -5, 3, 4, 5}
 

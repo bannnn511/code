@@ -201,7 +201,7 @@ func TestSmallestSolution(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := FindSmallestSolution(tt.args.a, tt.args.x); got != tt.want {
-				t.Errorf("SmallestValue() = %v, want %v", got, tt.want)
+				t.Errorf("FindSmallestSolution() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -256,7 +256,7 @@ func TestMaximumValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := FindMaximumValue(tt.args.a); got != tt.want {
-				t.Errorf("SmallestValue() = %v, want %v", got, tt.want)
+				t.Errorf("FindMaximumValue() = %v, want %v", got, tt.want)
 			}
 		})
 	}
