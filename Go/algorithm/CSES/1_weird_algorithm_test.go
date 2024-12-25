@@ -11,6 +11,9 @@ import (
 	"testing"
 )
 
+const in1 = "1_tests/%d.in1"
+const out1 = "1_tests/%d.out1"
+
 func check(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
@@ -22,7 +25,7 @@ func ReadInts(t *testing.T) []int {
 	t.Helper()
 	var inputs []int
 	for i := 1; ; i++ {
-		file, err := os.OpenFile(fmt.Sprintf("tests/%d.in", i), os.O_RDONLY, 0)
+		file, err := os.OpenFile(fmt.Sprintf(in1, i), os.O_RDONLY, 0)
 		if errors.Is(err, fs.ErrNotExist) {
 			break
 		} else if err != nil {
@@ -34,6 +37,8 @@ func ReadInts(t *testing.T) []int {
 			check(t, err)
 			inputs = append(inputs, input)
 		}
+		closeErr := file.Close()
+		check(t, closeErr)
 	}
 
 	return inputs
@@ -42,8 +47,8 @@ func ReadInts(t *testing.T) []int {
 func Test_weirdAlgorithm(t *testing.T) {
 	tests := ReadInts(t)
 	for i, tt := range tests {
-		t.Run(fmt.Sprintf("tests/%d.out", i+1), func(t *testing.T) {
-			outByte, err := os.ReadFile(fmt.Sprintf("tests/%d.out", i+1))
+		t.Run(fmt.Sprintf("tests/%d.out1", i+1), func(t *testing.T) {
+			outByte, err := os.ReadFile(fmt.Sprintf(out1, i+1))
 			out := strings.TrimSpace(string(outByte))
 			if err != nil {
 				t.Fatalf(err.Error())
