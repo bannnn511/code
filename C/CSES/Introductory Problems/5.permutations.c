@@ -10,7 +10,6 @@ int main() {
     long n;
     scanf("%ld", &n);
 
-
     if (n == 1) {
         printf("1 ");
     } else if (n <= 3) {
