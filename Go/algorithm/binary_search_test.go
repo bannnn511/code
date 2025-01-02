@@ -133,6 +133,14 @@ func TestSearchInts2(t *testing.T) {
 			},
 			want: 8,
 		},
+		{
+			name: "Test case 7",
+			args: args{
+				a: []int{1},
+				x: 1,
+			},
+			want: 0,
+		},
 	}
 
 	for _, tt := range tests {
