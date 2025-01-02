@@ -2,3 +2,4 @@
 *.dSYM
 venv
 .cache
+.DS_STORE
