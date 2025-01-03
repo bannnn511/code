@@ -4,22 +4,23 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <set>
 #include <vector>
 
 typedef long long ll;
 const ll maxN = 2e5 + 1;
 
+
 int main() {
     ll n, m;
-    std::vector<ll> V;
+    std::multiset<ll> S;
     scanf("%lld  %lld", &n, &m);
     for (ll i = 0; i < n; i++) {
         ll x;
         scanf("%lld", &x);
-        V.push_back(x);
+        S.insert(-x);
     }
 
-    std::sort(V.begin(), V.end());
 
     ll b[maxN];
     for (ll i = 0; i < m; i++) {
@@ -27,18 +28,13 @@ int main() {
     }
 
     for (ll i = 0; i < m; i++) {
-        auto it = std::lower_bound(V.begin(), V.end(), b[i]);
-        if ((it == V.begin() && *it > b[i]) || V.empty()) {
+        auto it = S.lower_bound(-b[i]);
+        if (it == S.end()) {
             printf("-1\n");
-            continue;
-        }
-        if (it != V.end() && *it == b[i]) {
-            printf("%lld\n", *it);
         } else {
-            --it;
-            printf("%lld\n", *it);
+            printf("%lld\n", -*it);
+            S.erase(it);
         }
-        V.erase(it);
     }
 
 
@@ -59,8 +55,8 @@ int main() {
 //
 //     return k;
 // }
-
-
+//
+//
 // int main() {
 //     ll n, m;
 //     ll a[maxN];
@@ -71,18 +67,19 @@ int main() {
 //
 //     std::sort(a, a + n);
 //
-//     ll b[maxN];
 //     for (ll i = 0; i < m; i++) {
-//         scanf("%lld", &b[i]);
-//     }
+//         ll input;
+//         scanf("%lld", &input);
 //
-//     for (ll i = 0; i < m; i++) {
-//         ll idx = search(a, n, b[i]);
+//         // binary search
+//         ll idx = search(a, n, input);
 //         if (idx == -1) {
 //             printf("-1\n");
 //             continue;
 //         }
 //         printf("%lld\n", a[idx]);
+//
+//         // remove a[idx] from array
 //         if (idx < n) {
 //             for (ll j = idx; j < n; j++) {
 //                 a[j] = a[j + 1];
@@ -94,3 +91,5 @@ int main() {
 //
 //     return 0;
 // }
+//
+//
