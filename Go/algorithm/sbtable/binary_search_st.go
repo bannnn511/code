@@ -1,17 +1,20 @@
 package sbtable
 
-import (
-	"cmp"
-)
+type Ordered interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
+	~float32 | ~float64 |
+	~string
+}
 
-type BinarySearchST[T cmp.Ordered, K cmp.Ordered] struct {
+type BinarySearchST[T Ordered, K Ordered] struct {
 	keys     []T
 	values   []K
 	length   int
 	capacity int
 }
 
-func NewBST[T, K cmp.Ordered]() *BinarySearchST[T, K] {
+func NewBST[T, K Ordered]() *BinarySearchST[T, K] {
 	keys := make([]T, 2)
 	values := make([]K, 2)
 	return &BinarySearchST[T, K]{
