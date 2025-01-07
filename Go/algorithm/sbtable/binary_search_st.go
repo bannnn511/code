@@ -7,17 +7,19 @@ type Ordered interface {
 	~string
 }
 
-type BinarySearchST[T Ordered, K Ordered] struct {
-	keys     []T
-	values   []K
+type BinarySearchST[K Ordered, V Ordered] struct {
+	keys     []K
+	values   []V
 	length   int
 	capacity int
 }
 
-func NewBST[T, K Ordered]() *BinarySearchST[T, K] {
-	keys := make([]T, 2)
-	values := make([]K, 2)
-	return &BinarySearchST[T, K]{
+var _ SymbolTale[int, int] = &BinarySearchST[int, int]{}
+
+func NewBST[K, V Ordered]() *BinarySearchST[K, V] {
+	keys := make([]K, 2)
+	values := make([]V, 2)
+	return &BinarySearchST[K, V]{
 		keys:     keys,
 		values:   values,
 		length:   0,
@@ -25,11 +27,11 @@ func NewBST[T, K Ordered]() *BinarySearchST[T, K] {
 	}
 }
 
-func (t *BinarySearchST[T, K]) Size() int {
+func (t *BinarySearchST[K, V]) Size() int {
 	return t.length
 }
 
-func (t *BinarySearchST[T, K]) Put(key T, value K) {
+func (t *BinarySearchST[K, V]) Put(key K, value V) {
 	i := t.Rank(key)
 	if i < t.length && t.keys[i] == key {
 		t.values[i] = value
@@ -47,7 +49,7 @@ func (t *BinarySearchST[T, K]) Put(key T, value K) {
 	}
 }
 
-func (t *BinarySearchST[T, K]) Rank(key T) int {
+func (t *BinarySearchST[K, V]) Rank(key K) int {
 	lo, hi := 0, t.length
 	for lo < hi {
 		mid := lo + (hi-lo)/2
@@ -64,7 +66,7 @@ func (t *BinarySearchST[T, K]) Rank(key T) int {
 	return lo
 }
 
-func (t *BinarySearchST[T, K]) Rank2(key T, low, high int) int {
+func (t *BinarySearchST[K, V]) Rank2(key K, low, high int) int {
 	if high < low {
 		return low
 	}
@@ -79,21 +81,23 @@ func (t *BinarySearchST[T, K]) Rank2(key T, low, high int) int {
 	return mid
 }
 
-func (t *BinarySearchST[T, K]) Get(key T) K {
-	for i, x := range t.keys {
-		if x == key {
-			return t.values[i]
-		}
+func (t *BinarySearchST[K, V]) Get(key K) (V, bool) {
+	var result V
+	if t.IsEmpty() {
+		return result, false
 	}
 
-	var result K
+	i := t.Rank(key)
+	if i < t.length && t.keys[i] == key {
+		return t.values[i], true
+	}
 
-	return result
+	return result, false
 }
 
-func (t *BinarySearchST[T, K]) resize(max int) {
-	keys := make([]T, max)
-	values := make([]K, max)
+func (t *BinarySearchST[K, V]) resize(max int) {
+	keys := make([]K, max)
+	values := make([]V, max)
 
 	for i := 0; i < t.length; i++ {
 		keys[i], values[i] = t.keys[i], t.values[i]
@@ -102,4 +106,24 @@ func (t *BinarySearchST[T, K]) resize(max int) {
 	t.keys = keys
 	t.values = values
 	t.capacity = max
+}
+
+func (t *BinarySearchST[K, V]) Delete(key K) {
+	idx := t.Rank(key)
+	if idx == t.length || t.keys[idx] != key {
+		return
+	}
+	for i := idx; i < t.length; i++ {
+		t.keys[i], t.values[i] = t.keys[i+1], t.values[i+1]
+	}
+	t.length--
+}
+
+func (t *BinarySearchST[K, V]) Contains(key K) bool {
+	_, ok := t.Get(key)
+	return ok
+}
+
+func (t *BinarySearchST[K, V]) IsEmpty() bool {
+	return t.length == 0
 }
