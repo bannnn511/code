@@ -5,7 +5,7 @@ import (
 )
 
 func TestBinarySearchST_Put(t *testing.T) {
-	bst := NewBST[string, int]()
+	bst := NewBS[string, int]()
 	bst.Put("a", 1)
 
 	test1 := bst.Rank("a")
@@ -43,7 +43,7 @@ func TestBinarySearchST_Put(t *testing.T) {
 }
 
 func TestBinarySearchST_resize(t *testing.T) {
-	bst := NewBST[int, string]()
+	bst := NewBS[int, string]()
 	bst.Put(1, "a")
 
 	bst.Put(2, "b")
@@ -67,7 +67,7 @@ func TestBinarySearchST_resize(t *testing.T) {
 }
 
 func TestBinarySearchST_Delete(t *testing.T) {
-	bst := NewBST[string, int]()
+	bst := NewBS[string, int]()
 	bst.Put("a", 1)
 	bst.Put("b", 2)
 	bst.Put("c", 3)

@@ -2,12 +2,13 @@ package sbtable_test
 
 import (
 	"fmt"
+
 	"github.com/bannnn511/code/go/algorithm/sbtable"
 )
 
 func ExampleBinarySearchST() {
 	// Create a new Binary Search Symbol Table
-	bst := sbtable.NewBST[string, int]()
+	bst := sbtable.NewBS[string, int]()
 
 	// Insert key-value pairs
 	bst.Put("a", 1)

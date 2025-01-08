@@ -1,6 +1,6 @@
 package sbtable
 
-type SymbolTale[K, V Ordered] interface {
+type ISymbolTale[K, V Ordered] interface {
 	Put(key K, value V)
 	Get(key K) (V, bool)
 	Delete(key K)

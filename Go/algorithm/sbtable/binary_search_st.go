@@ -2,9 +2,9 @@ package sbtable
 
 type Ordered interface {
 	~int | ~int8 | ~int16 | ~int32 | ~int64 |
-	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
-	~float32 | ~float64 |
-	~string
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
+		~float32 | ~float64 |
+		~string
 }
 
 type BinarySearchST[K Ordered, V Ordered] struct {
@@ -14,9 +14,9 @@ type BinarySearchST[K Ordered, V Ordered] struct {
 	capacity int
 }
 
-var _ SymbolTale[int, int] = &BinarySearchST[int, int]{}
+var _ ISymbolTale[int, int] = &BinarySearchST[int, int]{}
 
-func NewBST[K, V Ordered]() *BinarySearchST[K, V] {
+func NewBS[K, V Ordered]() *BinarySearchST[K, V] {
 	keys := make([]K, 2)
 	values := make([]V, 2)
 	return &BinarySearchST[K, V]{
