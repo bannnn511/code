@@ -1,5 +1,9 @@
 package sbtable
 
+import (
+	"fmt"
+)
+
 type Node[K, V Ordered] struct {
 	key   K
 	value V
@@ -59,16 +63,16 @@ func (t *Tree[K, V]) Get(key K) (V, bool) {
 
 // IsEmpty implements ISymbolTale.
 func (t *Tree[K, V]) IsEmpty() bool {
-	panic("unimplemented")
+	return t.root.n > 0
 }
 
 func (t *Tree[K, V]) put(node *Node[K, V], key K, value V) *Node[K, V] {
 	if node == nil {
 		return newNode(key, value, 1)
 	}
-	if node.key > key {
+	if key > node.key {
 		node.right = t.put(node.right, key, value)
-	} else if node.key < key {
+	} else if key < node.key {
 		node.left = t.put(node.left, key, value)
 	} else {
 		node.value = value
@@ -103,4 +107,56 @@ func (t *Tree[K, V]) Size() int {
 	}
 
 	return t.size(t.root)
+}
+
+func (t *Tree[K, V]) printDFS(node *Node[K, V], order int) {
+	if node == nil || order == -1 {
+		return
+	}
+	if order == 0 {
+		fmt.Printf("%v ", node.key)
+		t.printDFS(node.left, 0)
+		t.printDFS(node.right, 0)
+	} else if order == 1 {
+		t.printDFS(node.left, 1)
+		fmt.Printf("%v ", node.key)
+		t.printDFS(node.right, 1)
+	} else {
+		t.printDFS(node.left, 2)
+		t.printDFS(node.right, 2)
+		fmt.Printf("%v ", node.key)
+	}
+}
+
+func (t *Tree[K, V]) PrintDFS(order int) {
+	t.printDFS(t.root, order)
+}
+
+func (t *Tree[K, V]) LevelOrder(level int) []K {
+	if t.root == nil {
+		return nil
+	}
+
+	queue := []*Node[K, V]{t.root}
+	counter := 0
+	var keys []K
+	for len(queue) > 0 {
+		if counter > level {
+			return keys
+		}
+		for _, node := range queue {
+			if node.left != nil {
+				queue = append(queue, node.left)
+			}
+			if node.right != nil {
+				queue = append(queue, node.right)
+			}
+
+			keys = append(keys, node.key)
+			queue = queue[1:]
+		}
+		counter++
+	}
+
+	return keys
 }
