@@ -43,4 +43,58 @@ FROM users u
                        WHERE user_id = u.id
                        ORDER BY id DESC
                        LIMIT 1) most_recent_bookmarks ON TRUE
-LIMIT 10
+LIMIT 10;
+
+
+-- ROWS FROM
+
+SELECT lower, CHR(upper)
+FROM ROWS FROM (
+         GENERATE_SERIES(1, 10),
+         GENERATE_SERIES(65, 75)
+         ) AS t(lower, upper);
+
+SELECT date::date, num
+FROM ROWS FROM (
+         GENERATE_SERIES('2024-01-01'::date, '2024-12-31'::date, '1 day'),
+         GENERATE_SERIES(1, 366)
+         ) AS t(date, num)
+
+
+-- users that have > 16 bookmarks
+
+EXPLAIN (ANALYZE, BUFFERS, VERBOSE, SETTINGS, FORMAT JSON)
+SELECT *
+FROM users
+WHERE id IN (SELECT user_id
+             FROM bookmarks
+             GROUP BY user_id
+             HAVING COUNT(*) > 16)
+
+
+EXPLAIN
+SELECT users.id, users.first_name, users.last_name, whale_users.ct
+FROM (SELECT user_id, COUNT(*) AS ct
+      FROM bookmarks
+      GROUP BY user_id
+      HAVING COUNT(*) > 16) AS whale_users
+         JOIN users ON users.id = whale_users.user_id
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
