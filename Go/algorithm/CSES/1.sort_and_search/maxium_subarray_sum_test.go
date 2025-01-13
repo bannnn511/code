@@ -1,4 +1,4 @@
-package sort_and_search
+package __sort_and_search
 
 import "testing"
 
