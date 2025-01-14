@@ -119,9 +119,16 @@ FROM pg_stat_activity
 WHERE query LIKE 'autovacuum:%';
 
 
+-- index join
+DROP INDEX bookmarks_secure_url;
 
+CREATE INDEX idx_bookmarks_users_id ON bookmarks (user_id);
 
-
+EXPLAIN
+SELECT *
+FROM users
+         INNER JOIN bookmarks ON bookmarks.user_id = users.id
+WHERE users.id < 100
 
 
 

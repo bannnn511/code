@@ -138,15 +138,34 @@ CREATE INDEX birthday_created ON users (birthday DESC, created_at ASC);
 EXPLAIN
 SELECT *
 FROM users
-ORDER BY birthday ASC , created_at DESC
+ORDER BY birthday ASC, created_at DESC
 LIMIT 10;
 
---
+-- UNION
+SELECT TRUE AS active, *
+FROM users
+WHERE email = 'aaron.francis@example.com'
+UNION
+SELECT FALSE, *
+FROM users_archive
+WHERE email = 'aaron.francis@example.com';
 
+SELECT 1
+UNION ALL
+SELECT 1;
 
+-- GENERATE SERIES and ordinality
+SELECT *
+FROM UNNEST(ARRAY ['first', 'second', 'third']) WITH ORDINALITY AS t(element, ordinality);
 
-
-
+-- jsonb to record
+SELECT *
+FROM JSONB_TO_RECORDSET('[
+  {
+    "id": 1,
+    "name": "an"
+  }
+]'::jsonb) AS x (id int, name text);
 
 
 
