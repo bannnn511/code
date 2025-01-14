@@ -72,15 +72,51 @@ WHERE id IN (SELECT user_id
              HAVING COUNT(*) > 16)
 
 
+
 EXPLAIN
+SELECT *
+FROM users
+WHERE EXISTS (SELECT 1
+              FROM bookmarks
+              WHERE users.id = bookmarks.user_id
+              GROUP BY user_id
+              HAVING COUNT(*) > 16);
+
+EXPLAIN ANALYSE
+SELECT *
+FROM users
+WHERE EXISTS (SELECT 1
+              FROM bookmarks
+              WHERE users.id = bookmarks.user_id
+                AND starts_with(url, 'https')
+              GROUP BY user_id
+              HAVING COUNT(*) > 16);
+
+EXPLAIN ANALYSE
 SELECT users.id, users.first_name, users.last_name, whale_users.ct
 FROM (SELECT user_id, COUNT(*) AS ct
       FROM bookmarks
       GROUP BY user_id
       HAVING COUNT(*) > 16) AS whale_users
-         JOIN users ON users.id = whale_users.user_id
+         JOIN users ON users.id = whale_users.user_id;
+
+EXPLAIN ANALYSE
+SELECT *
+FROM users
+WHERE EXISTS (SELECT 1
+              FROM bookmarks
+              WHERE users.id = bookmarks.user_id
+              GROUP BY user_id
+              HAVING COUNT(*) > 16);
 
 
+
+VACUUM ANALYZE bookmarks;
+VACUUM FULL users;
+
+SELECT COUNT(*)
+FROM pg_stat_activity
+WHERE query LIKE 'autovacuum:%';
 
 
 

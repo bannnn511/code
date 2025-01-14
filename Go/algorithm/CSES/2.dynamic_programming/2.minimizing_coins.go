@@ -15,5 +15,9 @@ func minimizingCoins(coins []int, x int) int {
 		}
 	}
 
+	for _, i := range ready {
+		println(i)
+	}
+
 	return ready[x]
 }

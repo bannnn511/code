@@ -22,3 +22,11 @@ SELECT *
 FROM users
 WHERE email < 'b'
 LIMIT 10;
+
+SELECT relname, reloptions
+FROM pg_class
+WHERE relname = 'bookmarks';
+
+SELECT relname AS table_name, last_autovacuum
+FROM pg_stat_user_tables
+WHERE relname = 'bookmarks';
