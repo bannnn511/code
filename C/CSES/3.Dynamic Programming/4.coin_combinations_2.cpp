@@ -1,5 +1,5 @@
 //
-// Created by ban on 13/1/25.
+// Created by ban on 14/1/25.
 //
 
 #include <cstdio>
@@ -22,8 +22,8 @@ int main() {
 
     ll *ready = new ll[maxN];
     ready[0] = 1;
-    for (int k = 1; k <= x; k++) {
-        for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++) {
+        for (int k = 1; k <= x; k++) {
             if (k < a[i]) {
                 continue;
             }
