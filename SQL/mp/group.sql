@@ -30,3 +30,4 @@ GROUP BY director;
 SELECT director, COUNT(*)
 FROM movies
 GROUP BY director;
+
