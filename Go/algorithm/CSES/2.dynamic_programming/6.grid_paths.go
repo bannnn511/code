@@ -10,10 +10,13 @@ func gridPath(squares [][]int) int {
 
 	for x := 1; x < length; x++ {
 		for y := 1; y < length; y++ {
-			if x == 1 && y == 1 {
+			if x == 1 &&
+				y == 1 &&
+				squares[1][1] != -1 {
 				paths[x][y] = 1
 				continue
 			}
+
 			if squares[x][y] == -1 {
 				paths[x][y] = 0
 			} else {
