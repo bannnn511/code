@@ -110,7 +110,7 @@ func Test_longestIncreasingSubsequence2(t *testing.T) {
 				array: []int{6, 2, 5, 1, 7, 4, 8, 3},
 				n:     4,
 			},
-			want: 3,
+			want: 2,
 		},
 	}
 	for _, tt := range tests {

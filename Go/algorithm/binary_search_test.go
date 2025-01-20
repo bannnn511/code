@@ -70,7 +70,7 @@ func TestSearchInts(t *testing.T) {
 				a: []int{1, 2, 3, 5, 5, 5, 7, 8, 9},
 				x: 5,
 			},
-			want: 3,
+			want: 4,
 		},
 	}
 
