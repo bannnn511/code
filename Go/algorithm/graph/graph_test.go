@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -50,4 +51,17 @@ func TestAdjacencyList(t *testing.T) {
 			}
 		}
 	}
+
+	if degree := g.Degree(0); degree != 2 {
+		t.Errorf("g.Degree(0)= %d, want: %d", degree, 2)
+	}
+
+	if degree := g.MaxDegree(); degree != 3 {
+		t.Errorf("g.MaxDegree()= %d, want: %d", degree, 3)
+	}
+
+	fmt.Println(g.String())
+	marked := make([]bool, g.E())
+	g.DFS(4, marked)
+	fmt.Println(marked)
 }

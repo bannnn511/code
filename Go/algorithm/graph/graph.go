@@ -1,6 +1,9 @@
 package graph
 
-import "iter"
+import (
+	"fmt"
+	"iter"
+)
 
 type Graph interface {
 	Graph(v int)
@@ -95,6 +98,41 @@ func (a *AdjacencyList) Adj(v int) iter.Seq[int] {
 }
 
 func (a *AdjacencyList) String() string {
-	// TODO implement me
-	panic("implement me")
+	s := fmt.Sprintf("%d Vertices, %d Edges\n", a.VCount, a.ECount)
+	for v := 0; v < a.VCount; v++ {
+		s += fmt.Sprintf("%d: ", v)
+		for w := range a.adj[v].All() {
+			s += fmt.Sprintf("%d ", w)
+		}
+		s += "\n"
+	}
+
+	return s
+}
+
+func (a *AdjacencyList) Degree(v int) int {
+	degree := 0
+	for range a.adj[v].All() {
+		degree++
+	}
+	return degree
+}
+
+func (a *AdjacencyList) MaxDegree() int {
+	maxDegree := 0
+	for i := 0; i < a.VCount; i++ {
+		maxDegree = max(maxDegree, a.Degree(i))
+	}
+
+	return maxDegree
+}
+
+func (a *AdjacencyList) DFS(v int, marked []bool) {
+	for e := range a.adj[v].All() {
+		if marked[e] {
+			continue
+		}
+		marked[e] = true
+		a.DFS(e, marked)
+	}
 }
