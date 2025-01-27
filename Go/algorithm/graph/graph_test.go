@@ -61,7 +61,4 @@ func TestAdjacencyList(t *testing.T) {
 	}
 
 	fmt.Println(g.String())
-	marked := make([]bool, g.E())
-	g.DFS(4, marked)
-	fmt.Println(marked)
 }
