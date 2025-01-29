@@ -5,7 +5,7 @@ import (
 	"iter"
 )
 
-type Graph interface {
+type IGraph interface {
 	Graph(v int)
 	V() int
 	E() int
@@ -14,7 +14,7 @@ type Graph interface {
 	String() string
 }
 
-var _ Graph = (*AdjacencyList)(nil)
+var _ IGraph = (*AdjacencyList)(nil)
 
 type AdjacencyList struct {
 	VCount int    // number of vertices

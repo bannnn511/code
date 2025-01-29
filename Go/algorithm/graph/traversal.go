@@ -2,7 +2,7 @@ package graph
 
 import "fmt"
 
-func DFSFunc(graph Graph, start int, visitFn func(v int) bool) {
+func DFSFunc(graph IGraph, start int, visitFn func(v int) bool) {
 	marked := make([]bool, graph.V())
 	marked[start] = true
 	stack := make([]int, 0, graph.V())
@@ -27,7 +27,7 @@ func DFSFunc(graph Graph, start int, visitFn func(v int) bool) {
 	}
 }
 
-func DFS(graph Graph, start int) {
+func DFS(graph IGraph, start int) {
 	DFSFunc(graph, start, func(v int) bool {
 		fmt.Printf("%d ", v)
 		return false
@@ -35,7 +35,7 @@ func DFS(graph Graph, start int) {
 	fmt.Println()
 }
 
-func Count(graph Graph, start int) int {
+func Count(graph IGraph, start int) int {
 	count := 0
 	DFSFunc(graph, start, func(v int) bool {
 		count++
@@ -46,7 +46,7 @@ func Count(graph Graph, start int) int {
 	return count
 }
 
-func BFSFunc(g Graph, start int, visitFn func(v int) bool) {
+func BFSFunc(g IGraph, start int, visitFn func(v int) bool) {
 	marked := make([]bool, g.V())
 	marked[start] = true
 	queue := make([]int, 0, g.V())
@@ -70,7 +70,7 @@ func BFSFunc(g Graph, start int, visitFn func(v int) bool) {
 	}
 }
 
-func BFS(g Graph, start int) {
+func BFS(g IGraph, start int) {
 	BFSFunc(g, start, func(v int) bool {
 		fmt.Printf("%d ", v)
 		return false

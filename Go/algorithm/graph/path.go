@@ -1,13 +1,13 @@
 package graph
 
 type Path struct {
-	g      Graph
+	g      IGraph
 	edgeTo []int
 	marked []bool
 	final  int // source
 }
 
-func NewPath(g Graph, start int) *Path {
+func NewPath(g IGraph, start int) *Path {
 	edgeTo := make([]int, g.V())
 	marked := make([]bool, g.V())
 	stack := make([]int, 0, g.V())
