@@ -24,7 +24,7 @@ void dfs(int i, int j) {
 }
 
 int main() {
-    scanf("%d %d", &n, &m);
+    scanf("%c %c", &n, &m);
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < m; j++) {
             char c;
