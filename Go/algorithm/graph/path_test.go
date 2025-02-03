@@ -3,7 +3,7 @@ package graph
 import "testing"
 
 func TestPath(t *testing.T) {
-	g := NewAdjacencyList(6)
+	g := NewUndirected(6)
 
 	g.AddEdge(0, 5)
 	g.AddEdge(2, 4)

@@ -1,12 +1,11 @@
 package graph
 
 import (
-	"fmt"
 	"testing"
 )
 
-func TestAdjacencyList(t *testing.T) {
-	g := NewAdjacencyList(5)
+func TestDirected(t *testing.T) {
+	g := NewDigraph(5)
 
 	if g.V() != 5 {
 		t.Errorf("g.V() = %d, want: %d", g.V(), 5)
@@ -28,10 +27,8 @@ func TestAdjacencyList(t *testing.T) {
 
 	expectedAdj := map[int][]int{
 		0: {2, 1},
-		1: {3, 2, 0},
-		2: {1, 0},
-		3: {4, 1},
-		4: {3},
+		1: {3, 2},
+		3: {4},
 	}
 
 	for v, expected := range expectedAdj {
@@ -51,14 +48,4 @@ func TestAdjacencyList(t *testing.T) {
 			}
 		}
 	}
-
-	if degree := g.Degree(0); degree != 2 {
-		t.Errorf("g.Degree(0)= %d, want: %d", degree, 2)
-	}
-
-	if degree := g.MaxDegree(); degree != 3 {
-		t.Errorf("g.MaxDegree()= %d, want: %d", degree, 3)
-	}
-
-	fmt.Println(g.String())
 }

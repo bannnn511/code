@@ -5,7 +5,7 @@ import (
 )
 
 func TestConnectedComponents(t *testing.T) {
-	g := NewAdjacencyList(13)
+	g := NewUndirected(13)
 
 	edges := [][2]int{
 		{0, 6}, {0, 2}, {0, 1}, {0, 5},

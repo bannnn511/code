@@ -14,22 +14,22 @@ type IGraph interface {
 	String() string
 }
 
-var _ IGraph = (*AdjacencyList)(nil)
+var _ IGraph = (*Undirected)(nil)
 
-type AdjacencyList struct {
+type Undirected struct {
 	VCount int    // number of vertices
 	ECount int    // number of edges
 	adj    []*Bag // adjacency list
 }
 
-func NewAdjacencyList(v int) *AdjacencyList {
-	l := &AdjacencyList{}
+func NewUndirected(v int) *Undirected {
+	l := &Undirected{}
 	l.Graph(v)
 
 	return l
 }
 
-func (a *AdjacencyList) Graph(v int) {
+func (a *Undirected) Graph(v int) {
 	a.VCount = v
 	a.adj = make([]*Bag, v)
 	for i := range a.adj {
@@ -37,25 +37,25 @@ func (a *AdjacencyList) Graph(v int) {
 	}
 }
 
-func (a *AdjacencyList) V() int {
+func (a *Undirected) V() int {
 	return a.VCount
 }
 
-func (a *AdjacencyList) E() int {
+func (a *Undirected) E() int {
 	return a.ECount
 }
 
-func (a *AdjacencyList) AddEdge(v int, w int) {
+func (a *Undirected) AddEdge(v int, w int) {
 	a.adj[v].Add(w)
 	a.adj[w].Add(v)
 	a.ECount++
 }
 
-func (a *AdjacencyList) Adj(v int) iter.Seq[int] {
+func (a *Undirected) Adj(v int) iter.Seq[int] {
 	return a.adj[v].All()
 }
 
-func (a *AdjacencyList) String() string {
+func (a *Undirected) String() string {
 	s := fmt.Sprintf("%d Vertices, %d Edges\n", a.VCount, a.ECount)
 	for v := 0; v < a.VCount; v++ {
 		s += fmt.Sprintf("%d: ", v)
@@ -68,7 +68,7 @@ func (a *AdjacencyList) String() string {
 	return s
 }
 
-func (a *AdjacencyList) Degree(v int) int {
+func (a *Undirected) Degree(v int) int {
 	degree := 0
 	for range a.adj[v].All() {
 		degree++
@@ -76,11 +76,21 @@ func (a *AdjacencyList) Degree(v int) int {
 	return degree
 }
 
-func (a *AdjacencyList) MaxDegree() int {
+func (a *Undirected) MaxDegree() int {
 	maxDegree := 0
 	for i := 0; i < a.VCount; i++ {
 		maxDegree = max(maxDegree, a.Degree(i))
 	}
 
 	return maxDegree
+}
+
+func (a *Undirected) HasEdge(v, w int) bool {
+	for e := range a.Adj(v) {
+		if e == w {
+			return true
+		}
+	}
+
+	return false
 }
