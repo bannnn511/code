@@ -2,7 +2,7 @@ package algorithm
 
 type UnionFind struct {
 	id    []int
-	rank  []int // Added for union by rank
+	rank  []int
 	count int
 }
 

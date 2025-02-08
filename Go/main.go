@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // import (
 // 	"fmt"
@@ -73,7 +76,7 @@ func testHeap() test {
 			break
 		}
 		i++
-		fmt.Println(isHeap)
+		_ = isHeap
 	}
 
 	return *b
@@ -92,4 +95,6 @@ func main() {
 	b := "world"
 	testString(&b)
 	fmt.Println(b)
+
+	slices.Sort([]int{})
 }
