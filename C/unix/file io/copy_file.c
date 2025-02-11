@@ -2,7 +2,7 @@
 #include <sys/_types/_ssize_t.h>
 #include "apue.h"
 
-#define BUFSIZE 32768
+#define BUFSIZE 4096
 
 int main()
 {

@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "apue.h": "c",
+        "fcntl.h": "c",
+        "_ssize_t.h": "c"
+    }
+}
