@@ -1,24 +1,27 @@
 #include <unistd.h>
 #include <sys/_types/_ssize_t.h>
-#include "../util.h"
+#include "apue.h"
 
 #define BUFSIZE 32768
 
-int main() {
+int main()
+{
    ssize_t n;
    char buf[BUFSIZE];
    int loop = 0;
 
-   while ((n = read(STDIN_FILENO, buf,BUFSIZE)) > 0) {
-      if (write(STDOUT_FILENO, buf, n) != n) {
-         handle_error(errno, "write error");
+   while ((n = read(STDIN_FILENO, buf, BUFSIZE)) > 0)
+   {
+      if (write(STDOUT_FILENO, buf, n) != n)
+      {
+         err_sys("write error");
       }
       loop++;
    }
 
-
-   if (n < 0) {
-      handle_error(errno, "write error");
+   if (n < 0)
+   {
+      err_sys("read error");
    }
 
    dprintf(STDERR_FILENO, "loops: %d\n", loop);
@@ -44,4 +47,3 @@ int main() {
  *  16384       2.04s           11.53ms         130.04ms        32768
  *  32768       1.98s           5.90ms          124.91ms        16384
  */
-
