@@ -8,39 +8,57 @@
 // Your code goes in the structure and functions below
 //
 
-typedef struct __rwlock_t {
+typedef struct __rwlock_t
+{
+  int readers;
+  zem_t turnstile;
   zem_t rlock;
   zem_t wlock;
-  int readers;
 } rwlock_t;
 
-void rwlock_init(rwlock_t *rw) {
+void rwlock_init(rwlock_t *rw)
+{
   zem_init(&rw->rlock, 1);
   zem_init(&rw->wlock, 1);
-  rw->readers = 0; // initialize the readers count
+  zem_init(&rw->turnstile, 1);
 }
 
-void rwlock_acquire_readlock(rwlock_t *rw) {
+void rwlock_acquire_readlock(rwlock_t *rw)
+{
+  zem_wait(&rw->turnstile); // block readers if there are waiting writers
+  zem_post(&rw->turnstile);
+
   zem_wait(&rw->rlock);
   rw->readers++;
-  if (rw->readers == 1) {
+  if (rw->readers == 1)
+  {
     zem_wait(&rw->wlock);
   }
   zem_post(&rw->rlock);
 }
 
-void rwlock_release_readlock(rwlock_t *rw) {
+void rwlock_release_readlock(rwlock_t *rw)
+{
   zem_wait(&rw->rlock);
   rw->readers--;
-  if (rw->readers == 0) {
+  if (rw->readers == 0)
+  {
     zem_post(&rw->wlock);
   }
   zem_post(&rw->rlock);
 }
 
-void rwlock_acquire_writelock(rwlock_t *rw) { zem_wait(&rw->wlock); }
+void rwlock_acquire_writelock(rwlock_t *rw)
+{
+  zem_wait(&rw->turnstile);
+  zem_wait(&rw->wlock);
+}
 
-void rwlock_release_writelock(rwlock_t *rw) { zem_post(&rw->wlock); }
+void rwlock_release_writelock(rwlock_t *rw)
+{
+  zem_post(&rw->turnstile);
+  zem_post(&rw->wlock);
+}
 
 //
 // Don't change the code below (just use it!)
@@ -51,21 +69,25 @@ int value = 0;
 
 rwlock_t lock;
 
-void *reader(void *arg) {
+void *reader(void *arg)
+{
   int i;
-  for (i = 0; i < loops; i++) {
+  for (i = 0; i < loops; i++)
+  {
     rwlock_acquire_readlock(&lock);
     printf("read %d\n", value);
+    sleep(1);
     rwlock_release_readlock(&lock);
   }
   return NULL;
 }
 
-void *writer(void *arg) {
+void *writer(void *arg)
+{
   int i;
-  for (i = 0; i < loops; i++) {
+  for (i = 0; i < loops; i++)
+  {
     rwlock_acquire_writelock(&lock);
-    sleep(1);
     value++;
     printf("write %d\n", value);
     sleep(1);
@@ -74,7 +96,8 @@ void *writer(void *arg) {
   return NULL;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
   assert(argc == 4);
   int num_readers = atoi(argv[1]);
   int num_writers = atoi(argv[2]);
