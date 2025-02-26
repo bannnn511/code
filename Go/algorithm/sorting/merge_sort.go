@@ -13,16 +13,16 @@ func merge[T cmp.Ordered](a []T, lo, mid, hi int) {
 
 	for k := lo; k <= hi; k++ { // Merge back to a[lo...hi]
 		if i > mid {
-			a[k] = a[j]
+			a[k] = aux[j]
 			j++
 		} else if j > hi {
-			a[k] = a[i]
+			a[k] = aux[i]
 			i++
-		} else if a[i] > a[j] {
-			a[k] = a[j]
+		} else if aux[j] < aux[i] {
+			a[k] = aux[j]
 			j++
 		} else {
-			a[k] = a[i]
+			a[k] = aux[i]
 			i++
 		}
 	}

@@ -1,6 +1,7 @@
 package algorithm
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"testing"
@@ -61,4 +62,10 @@ func TestMergeSortString(t *testing.T) {
 		t.Errorf("sorted %v", strs)
 		t.Errorf("   got %v", data)
 	}
+}
+
+func TestMergeSort1(t *testing.T) {
+	data := []int{5, 2, 4, 1, 7, 4, 6, 9}
+	MergeSortBU(data)
+	fmt.Println(data)
 }
