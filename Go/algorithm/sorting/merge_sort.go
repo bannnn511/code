@@ -28,18 +28,18 @@ func merge[T cmp.Ordered](a []T, lo, mid, hi int) {
 	}
 }
 
-func sort[T cmp.Ordered](a []T, lo, hi int) {
+func msort[T cmp.Ordered](a []T, lo, hi int) {
 	if lo >= hi {
 		return
 	}
 	mid := lo + (hi-lo)/2
-	sort(a, lo, mid)
-	sort(a, mid+1, hi)
+	msort(a, lo, mid)
+	msort(a, mid+1, hi)
 	merge(a, lo, mid, hi)
 }
 
 func MergeSort[T cmp.Ordered](a []T) {
-	sort(a, 0, len(a)-1)
+	msort(a, 0, len(a)-1)
 }
 
 func IsSorted[T cmp.Ordered](x []T) bool {
