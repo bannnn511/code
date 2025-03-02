@@ -26,6 +26,23 @@ func TestHeapInsert(t *testing.T) {
 	}
 }
 
+func TestHeapInsert2(t *testing.T) {
+	heap := NewMaxPQ(10)
+	values := []int{4, 2, 6, 1, 3, 8, 7, 9}
+	for i, v := range values {
+		heap.Insert(v)
+		if i == 0 && heap.pq[1] != 4 {
+			t.Errorf("Expected 4, got %d", heap.pq[1])
+		}
+		if i == 2 && heap.pq[1] != 6 {
+			t.Errorf("Expected 6, got %d", heap.pq[1])
+		}
+		if i == 5 && heap.pq[1] != 8 {
+			t.Errorf("Expected 8, got %d", heap.pq[1])
+		}
+	}
+}
+
 func TestHeapRemoveMax(t *testing.T) {
 	heap := NewMaxPQ(10)
 	values := []int{3, 1, 4, 1, 5, 9, 2, 6}

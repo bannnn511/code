@@ -18,6 +18,7 @@ func NewMaxPQ(maxN int) *MaxPQ {
 		n:        0,
 		capacity: maxN,
 	}
+
 }
 
 func (h *MaxPQ) Insert(key int) {
@@ -33,8 +34,8 @@ func (h *MaxPQ) Insert(key int) {
 func (h *MaxPQ) RemoveMax() int {
 	max := h.pq[1]
 	h.swap(1, h.n)
+	h.pq[h.n] = 0
 	h.n--
-	h.pq[h.n+1] = 0
 	h.sink(1)
 
 	return max
@@ -49,8 +50,11 @@ func (h *MaxPQ) swap(i, j int) {
 }
 
 func (h *MaxPQ) swim(k int) {
-	for k > 1 && h.less(k/2, k) {
-		h.swap(k/2, k)
+	for k > 1 {
+		i := k / 2
+		if h.less(i, k) {
+			h.swap(i, k)
+		}
 		k = k / 2
 	}
 }
