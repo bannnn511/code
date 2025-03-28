@@ -7,18 +7,19 @@ import (
 
 type vector struct {
 	arr  []int
-	lock sync.Mutex
+	lock *sync.Mutex
 }
 
 func NewVector(arr []int) *vector {
 	return &vector{
-		arr: arr,
+		arr:  arr,
+		lock: &sync.Mutex{},
 	}
 }
 
 func addVector(vDst *vector, vSrc *vector) {
-	v1 := fmt.Sprintf("%p", vDst)
-	v2 := fmt.Sprintf("%p", vSrc)
+	v1 := fmt.Sprintf("%p", vDst.lock)
+	v2 := fmt.Sprintf("%p", vSrc.lock)
 	// fmt.Printf("v1: %v, v2: %v\n", v1, v2)
 	if v1 < v2 {
 		vDst.lock.Lock()
