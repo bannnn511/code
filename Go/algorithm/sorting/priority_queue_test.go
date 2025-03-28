@@ -79,7 +79,7 @@ func TestHeapWithDuplicates(t *testing.T) {
 	sort.Sort(sort.Reverse(sort.IntSlice(sortedValues)))
 
 	// Remove all elements and verify they come out in descending order
-	for i := 0; i < len(values); i++ {
+	for i := range values {
 		max := heap.RemoveMax()
 		if max != sortedValues[i] {
 			t.Errorf("RemoveMax returned %d, expected %d", max, sortedValues[i])
