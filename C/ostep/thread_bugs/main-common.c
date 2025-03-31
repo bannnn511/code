@@ -1,5 +1,3 @@
-
-#include <c++/v1/cstdlib>
 vector_t v[2 * MAX_THREADS];
 
 // used to ensure print outs make sense
