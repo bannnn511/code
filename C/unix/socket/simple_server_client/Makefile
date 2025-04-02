@@ -6,7 +6,7 @@ all: $(ALL)
 clean:
 	rm -f $(ALL) *~
 
-server:
+server: server.c
 	gcc server.c -o server
-client:
+client: client.c
 	gcc client.c -o client
