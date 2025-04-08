@@ -42,6 +42,13 @@ int connect_to_server(const char *hostname, const char *port) {
     char ip[INET6_ADDRSTRLEN];
 
     for (p = res; p != NULL; p = p->ai_next) {
+        /*
+        * socket() creates an endpoint for communication and returns a file descriptor
+        * that refers to that endpoint. The socket has the following parameters:
+        * - domain (family): Specifies the protocol family (AF_INET for IPv4, AF_INET6 for IPv6)
+        * - type: Specifies the communication semantics (SOCK_STREAM for TCP)
+        * - protocol: Usually 0 to choose the default protocol for the given domain and type
+        */
         socket_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (socket_fd == -1) {
             perror("client: socket");
@@ -50,6 +57,13 @@ int connect_to_server(const char *hostname, const char *port) {
 
         inet_ntop(p->ai_family, get_in_addr(p->ai_addr), ip, sizeof(ip));
 
+        /*
+        * socket() creates an endpoint for communication and returns a file descriptor
+        * that refers to that endpoint. The socket has the following parameters:
+        * - domain (family): Specifies the protocol family (AF_INET for IPv4, AF_INET6 for IPv6)
+        * - type: Specifies the communication semantics (SOCK_STREAM for TCP)
+        * - protocol: Usually 0 to choose the default protocol for the given domain and type
+        */
         if (connect(socket_fd, p->ai_addr, p->ai_addrlen) == -1) {
             close(socket_fd);
             perror("client: connect");
@@ -92,36 +106,30 @@ int main(const int argc, char *argv[]) {
     int request_count = 0;
 
     int socket_fd = connect_to_server(argv[1], argv[2]);
-    while (keep_running) {
-        if (socket_fd == -1) {
-            sleep(INTERVAL);
-            continue;
-        }
+    if (socket_fd == -1) {
+        exit(EXIT_FAILURE);
+    }
 
-        request_count++;
-        printf("Request #%d\n", request_count);
+    request_count++;
+    printf("Request #%d\n", request_count);
 
-        // Send a dummy message (empty)
-        const char *msg = "";
-        size_t len = strlen(msg);
-        send(socket_fd, msg, len, 0);
-        printf("client: send\n");
+    // Send a dummy message (empty)
+    const char *msg = "";
+    size_t len = strlen(msg);
+    send(socket_fd, msg, len, 0);
+    printf("client: send\n");
 
-        // Receive response
-        char buf[MAXDATASIZE];
-        ssize_t number_bytes = recv(socket_fd, buf, MAXDATASIZE - 1, 0);
-        printf("cliend: recv\n");
-        if (number_bytes == -1) {
-            perror("client: recv");
-        } else if (number_bytes == 0) {
-            printf("Server closed connection\n");
-            break;
-        } else {
-            buf[number_bytes] = '\0';
-            printf("Received: '%s'\n", buf);
-        }
-
-        // sleep(INTERVAL);
+    // Receive response
+    char buf[MAXDATASIZE];
+    ssize_t number_bytes = recv(socket_fd, buf, MAXDATASIZE - 1, 0);
+    printf("cliend: recv\n");
+    if (number_bytes == -1) {
+        perror("client: recv");
+    } else if (number_bytes == 0) {
+        printf("Server closed connection\n");
+    } else {
+        buf[number_bytes] = '\0';
+        printf("Received: '%s'\n", buf);
     }
 
     printf("\nClient stopped.\n");

@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include "socket.c"
-#include "time.h"
 #include <fcntl.h>
 
 
@@ -83,7 +82,7 @@ int create_server() {
 
 
 int main() {
-    int socket_fd = create_server();
+    const int socket_fd = create_server();
 
     // listen socket
     if (listen(socket_fd, BACKLOG) == -1) {
@@ -151,7 +150,8 @@ int main() {
                 continue;
             }
             inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *) &their_addr), buf, sizeof(buf));
-            printf("connection from: %s\n", buf);
+            printf("connection from: %s, domains: %d \n", buf, their_addr.ss_family);
+            printf("lists of domains, AFUNIX: %d, IPv4: %d, IPv6:%d\n", AF_UNIX, AF_INET, AF_INET6);
 
             if (newfd > nfds) {
                 nfds = newfd;
@@ -182,9 +182,6 @@ int main() {
 
                 // Open the requested file
                 printf("server: open and read file\n");
-                srand(time(NULL)); // Seed with time and request count for better randomness
-                sleep(rand() % 5 + 1); // Random sleep between 1-5 seconds
-
                 int fd = open(buffer, O_RDONLY | O_SYNC);
                 if (fd == -1) {
                     const char *error_msg = "Error: File not found";

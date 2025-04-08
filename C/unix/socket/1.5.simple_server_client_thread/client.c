@@ -8,7 +8,7 @@
 #include <signal.h>
 #include <time.h>
 
-#define MAXDATASIZE 1024 // max number of bytes we can get at once
+#define MAXDATASIZE 100 // max number of bytes we can get at once
 #define INTERVAL 4      // seconds between requests
 
 volatile sig_atomic_t keep_running = 1;
@@ -26,20 +26,29 @@ void *get_in_addr(struct sockaddr *sa) {
 
 int connect_to_server(const char *hostname, const char *port) {
     struct addrinfo hints, *res, *p;
-    int socket_fd = -1;
+    int socket_fd;
+    int status;
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    const int status = getaddrinfo(hostname, port, &hints, &res);
+    status = getaddrinfo(hostname, port, &hints, &res);
     if (status != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
         return -1;
     }
 
     char ip[INET6_ADDRSTRLEN];
+
     for (p = res; p != NULL; p = p->ai_next) {
+        /*
+        * socket() creates an endpoint for communication and returns a file descriptor
+        * that refers to that endpoint. The socket has the following parameters:
+        * - domain (family): Specifies the protocol family (AF_INET for IPv4, AF_INET6 for IPv6)
+        * - type: Specifies the communication semantics (SOCK_STREAM for TCP)
+        * - protocol: Usually 0 to choose the default protocol for the given domain and type
+        */
         socket_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (socket_fd == -1) {
             perror("client: socket");
@@ -48,7 +57,13 @@ int connect_to_server(const char *hostname, const char *port) {
 
         inet_ntop(p->ai_family, get_in_addr(p->ai_addr), ip, sizeof(ip));
 
-
+        /*
+        * socket() creates an endpoint for communication and returns a file descriptor
+        * that refers to that endpoint. The socket has the following parameters:
+        * - domain (family): Specifies the protocol family (AF_INET for IPv4, AF_INET6 for IPv6)
+        * - type: Specifies the communication semantics (SOCK_STREAM for TCP)
+        * - protocol: Usually 0 to choose the default protocol for the given domain and type
+        */
         if (connect(socket_fd, p->ai_addr, p->ai_addrlen) == -1) {
             close(socket_fd);
             perror("client: connect");
@@ -88,51 +103,36 @@ int main(const int argc, char *argv[]) {
 
     printf("Client started. Press Ctrl+C to stop.\n");
 
-    const int socket_fd = connect_to_server(argv[1], argv[2]);
-    while (keep_running) {
-        if (socket_fd == -1) {
-            sleep(INTERVAL);
-            continue;
-        }
+    int request_count = 0;
 
-        char buffer[MAXDATASIZE];
-        printf("client: input file name: ");
-        fflush(stdout);
-        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
-            fprintf(stderr, "Error reading input\n");
-            break;
-        }
-        // Remove newline character if present
-        size_t len = strlen(buffer);
-        if (len > 0 && buffer[len - 1] == '\n') {
-            buffer[len - 1] = '\0';
-            len--;
-        }
-        send(socket_fd, buffer, len, 0);
-        printf("client: send\n");
+    int socket_fd = connect_to_server(argv[1], argv[2]);
+    if (socket_fd == -1) {
+        exit(EXIT_FAILURE);
+    }
 
-        // Receive response
-        char buf[MAXDATASIZE];
-        ssize_t number_bytes = -1;
-        while ((number_bytes = recv(socket_fd, buf,MAXDATASIZE - 1, 0)) > 0) {
-            buf[number_bytes] = '\0';
-            printf("Received: '%s'\n", buf);
+    request_count++;
+    printf("Request #%d\n", request_count);
 
-            if (number_bytes < MAXDATASIZE - 1) {
-                break;
-            }
-        }
+    // Send a dummy message (empty)
+    const char *msg = "";
+    size_t len = strlen(msg);
+    send(socket_fd, msg, len, 0);
+    printf("client: send\n");
 
-        printf("client: recv\n");
-        if (number_bytes == -1) {
-            perror("client: recv");
-        } else if (number_bytes == 0) {
-            printf("Server closed connection\n");
-            break;
-        }
+    // Receive response
+    char buf[MAXDATASIZE];
+    const ssize_t number_bytes = recv(socket_fd, buf, MAXDATASIZE - 1, 0);
+    printf("cliend: recv\n");
+    if (number_bytes == -1) {
+        perror("client: recv");
+    } else if (number_bytes == 0) {
+        printf("Server closed connection\n");
+        exit(EXIT_FAILURE);
+    } else {
+        buf[number_bytes] = '\0';
+        printf("Received: '%s'\n", buf);
     }
 
     printf("\nClient stopped.\n");
-
     return 0;
 }
