@@ -176,7 +176,7 @@ int main() {
 
                 // Open the requested file
                 printf("server: open and read file\n");
-                int fd = open(buffer, O_RDONLY | O_SYNC);
+                int fd = open(buffer, O_RDONLY);
                 if (fd == -1) {
                     const char *error_msg = "Error: File not found";
                     send(sock, error_msg, strlen(error_msg), 0);
