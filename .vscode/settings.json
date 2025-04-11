@@ -5,6 +5,7 @@
         "_ssize_t.h": "c",
         "__tree": "cpp",
         "map": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "socket.h": "c"
     }
 }

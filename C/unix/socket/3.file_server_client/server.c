@@ -75,6 +75,26 @@ int create_server() {
     return socket_fd;
 }
 
+void accept_client(int socket_fd, fd_set *read_fds, struct SocketArray *connected_sockets) {
+    struct sockaddr_storage their_addr;
+    socklen_t addr_size = sizeof(their_addr);
+    char buf[INET6_ADDRSTRLEN];
+
+    // accept incoming connection
+    const int newfd = accept(socket_fd, (struct sockaddr *)&their_addr, &addr_size);
+    if (newfd == -1) {
+        perror("accept");
+        return;
+    }
+
+    // Add the new socket to the array
+    add_socket(connected_sockets, newfd);
+    FD_SET(newfd, read_fds);
+
+    inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), buf, sizeof(buf));
+    printf("server: connection from: %s\n", buf);
+}
+
 int main() {
     const int socket_fd = create_server();
 
@@ -133,25 +153,7 @@ int main() {
 
         // new socket connection from client
         if (FD_ISSET(socket_fd, &read_fds)) {
-            printf("server: new connection\n");
-            struct sockaddr_storage their_addr;
-            socklen_t addr_size = sizeof(their_addr);
-            char buf[INET6_ADDRSTRLEN];
-            // accept incoming connection
-            const int newfd = accept(socket_fd, (struct sockaddr *)&their_addr, &addr_size);
-            if (newfd == -1) {
-                continue;
-            }
-            inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), buf,
-                      sizeof(buf));
-            printf("connection from: %s, domains: %d \n", buf, their_addr.ss_family);
-            printf("lists of domains, AFUNIX: %d, IPv4: %d, IPv6:%d\n", AF_UNIX, AF_INET, AF_INET6);
-
-            if (newfd > nfds) {
-                nfds = newfd;
-            }
-            add_socket(connected_sockets, newfd);
-            FD_SET(newfd, &read_fds);
+            accept_client(socket_fd, &read_fds, connected_sockets);
         }
 
         for (size_t i = 0; i < connected_sockets->size; i++) {
@@ -176,7 +178,7 @@ int main() {
 
                 // Open the requested file
                 printf("server: open and read file\n");
-                int fd = open(buffer, O_RDONLY | O_SYNC);
+                int fd = open(buffer, O_RDONLY | O_NONBLOCK);
                 if (fd == -1) {
                     const char *error_msg = "Error: File not found";
                     send(sock, error_msg, strlen(error_msg), 0);
