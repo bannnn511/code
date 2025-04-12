@@ -10,8 +10,8 @@ OBJS = wserver.o wclient.o request.o io_helper.o
 
 all: wserver wclient spin.cgi
 
-wserver: wserver.o request.o io_helper.o
-	$(CC) $(CFLAGS) -o wserver wserver.o request.o io_helper.o 
+wserver: wserver.o request.o io_helper.o threadpool.o
+	$(CC) $(CFLAGS) -o wserver wserver.o request.o io_helper.o threadpool.o
 
 wclient: wclient.o io_helper.o
 	$(CC) $(CFLAGS) -o wclient wclient.o io_helper.o
