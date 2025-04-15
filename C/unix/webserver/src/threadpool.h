@@ -7,6 +7,7 @@
 
 #include "thread_helper.h"
 #include <pthread.h>
+#include <semaphore.h>
 
 typedef struct thread_pool_task {
     void (*function)(void *);
@@ -15,6 +16,8 @@ typedef struct thread_pool_task {
 } thread_pool_task;
 
 typedef struct thread_pool {
+    sem_t *full;
+    sem_t *empty;
     pthread_mutex_t lock;
     pthread_cond_t cond;
     thread_pool_task *queue;
@@ -24,14 +27,15 @@ typedef struct thread_pool {
     int thread_count;
     int head;
     int tail;
+    int shutdown;
 } thread_pool;
 
 int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_size);
 
-int thread_pool_add(thread_pool *pool, void (function)(void *), void *argument);
+int thread_pool_add(thread_pool *pool, void (*function)(void *), void *argument);
 
 void thread_pool_wait(thread_pool *pool);
 
 int thread_pool_destroy(thread_pool *pool);
 
-#endif //THREADPOOL_H
+#endif  // THREADPOOL_H
