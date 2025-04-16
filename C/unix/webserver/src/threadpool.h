@@ -16,9 +16,9 @@ typedef struct thread_pool_task {
 } thread_pool_task;
 
 typedef struct thread_pool {
-    sem_t *full;
-    sem_t *empty;
     pthread_mutex_t lock;
+    pthread_cond_t full;
+    pthread_cond_t empty;
     pthread_cond_t cond;
     thread_pool_task *queue;
     pthread_t *threads;
@@ -28,6 +28,7 @@ typedef struct thread_pool {
     int head;
     int tail;
     int shutdown;
+    int idx;
 } thread_pool;
 
 int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_size);

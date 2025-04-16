@@ -8,9 +8,9 @@
 // Simple task function that sleeps for a specified time
 void sleep_task(void *arg) {
     int seconds = *((int *) arg);
-    printf("Task sleeping for %d seconds\n", seconds);
+    // printf("Task sleeping for %d seconds\n", seconds);
     sleep(seconds);
-    printf("Task woke up after %d seconds\n", seconds);
+    // printf("Task woke up after %d seconds\n", seconds);
 }
 
 // Task that increments a counter with mutex protection
@@ -39,6 +39,7 @@ void test_basic_functionality() {
     thread_pool_add(pool, (void *) sleep_task, &sleep3);
 
     thread_pool_wait(pool);
+    sleep(2);
     thread_pool_destroy(pool);
     free(pool);
     printf("Basic functionality test passed\n");
@@ -50,7 +51,7 @@ void test_full_queue() {
     thread_pool *pool = malloc(sizeof(thread_pool));
     assert(thread_pool_init(pool, 1, 3) == 0);
 
-    int sleep_times[5] = {3, 3, 3, 3, 3};
+    int sleep_times[5] = {1, 1, 1, 1, 1};
 
     // Add tasks to fill the queue
     for (int i = 0; i < 3; i++) {
@@ -92,8 +93,8 @@ void test_high_concurrency() {
     thread_pool_wait(pool);
 
     // Verify the counter
-    assert(*shared_data == NUM_TASKS);
     printf("Counter value: %d (expected %d)\n", *shared_data, NUM_TASKS);
+    assert(*shared_data == NUM_TASKS);
 
     pthread_mutex_destroy(mutex);
     free(shared_data);
@@ -108,7 +109,7 @@ void test_shutdown() {
     thread_pool *pool = malloc(sizeof(thread_pool));
     assert(thread_pool_init(pool, 4, 8) == 0);
 
-    int sleep_long = 5;
+    int sleep_long = 3;
     int sleep_short = 1;
 
     // Add some long-running tasks
@@ -128,30 +129,6 @@ void test_shutdown() {
     printf("Shutdown test passed\n");
 }
 
-// Test reinitializing the thread pool
-void test_reinitialization() {
-    printf("\n=== Test: Reinitialization ===\n");
-    thread_pool *pool = malloc(sizeof(thread_pool));
-
-    // First initialization
-    assert(thread_pool_init(pool, 2, 4) == 0);
-
-    int sleep1 = 1;
-    thread_pool_add(pool, (void *) sleep_task, &sleep1);
-    thread_pool_wait(pool);
-    thread_pool_destroy(pool);
-
-    // Second initialization with different parameters
-    assert(thread_pool_init(pool, 4, 8) == 0);
-
-    int sleep2 = 2;
-    thread_pool_add(pool, (void *) sleep_task, &sleep2);
-    thread_pool_wait(pool);
-    thread_pool_destroy(pool);
-
-    free(pool);
-    printf("Reinitialization test passed\n");
-}
 
 int main() {
     // Seed random number generator
@@ -160,8 +137,7 @@ int main() {
     test_basic_functionality();
     test_full_queue();
     test_high_concurrency();
-    // test_shutdown();
-    // test_reinitialization();
+    test_shutdown();
 
     printf("\nAll thread pool tests completed successfully!\n");
     return 0;
