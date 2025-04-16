@@ -6,6 +6,16 @@
         "__tree": "cpp",
         "map": "cpp",
         "set": "cpp",
-        "socket.h": "c"
+        "socket.h": "c",
+        "__node_handle": "c",
+        "__split_buffer": "c",
+        "array": "c",
+        "deque": "c",
+        "queue": "c",
+        "stack": "c",
+        "string": "c",
+        "string_view": "c",
+        "unordered_map": "c",
+        "vector": "c"
     }
 }

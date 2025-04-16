@@ -2,11 +2,6 @@
 #include "stdlib.h"
 #include "helper.c"
 #include "threadpool.h"
-#include <fcntl.h>
-#include <time.h>
-#include <semaphore.h>
-#include <errno.h>
-#include <unistd.h>
 
 struct worker_args {
     thread_pool *pool;
@@ -15,7 +10,39 @@ struct worker_args {
 
 void *worker(void *arg);
 
-int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_size) {
+void add_task(thread_pool *pool, thread_pool_task task) {
+    switch (pool->policy) {
+        case THREAD_POOL_POLICY_FIFO:
+            pool->queue[pool->head] = task;
+            pool->head = (pool->head + 1) % pool->queue_size;
+            pool->task_count++;
+            break;
+        case THREAD_POOL_POLICY_SFF:
+            heap_insert(&pool->sff_queue, 0);
+            break;
+    }
+}
+
+thread_pool_task pick_task(thread_pool *pool) {
+    thread_pool_task task;
+    switch (pool->policy) {
+        case THREAD_POOL_POLICY_FIFO:
+            task.function = pool->queue[pool->tail].function;
+            task.argument = pool->queue[pool->tail].argument;
+
+            pool->tail = (pool->tail + 1) % pool->queue_size;
+            pool->task_count--;
+            break;
+        case THREAD_POOL_POLICY_SFF:
+            heap_extract_min(&pool->sff_queue);
+            break;
+    }
+
+    return task;
+}
+
+int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_size,
+                     thread_pool_policy policy) {
     if (thread_count <= 0 || queue_size <= 0) {
         return -1;
     }
@@ -31,6 +58,7 @@ int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_
     pool->head = 0;
     pool->tail = 0;
     pool->shutdown = 0;
+    pool->policy = policy;
 
     for (int i = 0; i < thread_count; i++) {
         struct worker_args *args = malloc(sizeof(struct worker_args));
@@ -47,11 +75,10 @@ int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_
     return 0;
 }
 
-int thread_pool_add(thread_pool *pool, void (function)(void *), void *argument) {
+int thread_pool_add(thread_pool *pool, void(function)(void *), void *argument) {
     if (pool == NULL) {
         return -1;
     }
-
 
     thread_mutex_lock(&pool->lock);
     while (pool->task_count == pool->queue_size && !pool->shutdown) {
@@ -63,12 +90,13 @@ int thread_pool_add(thread_pool *pool, void (function)(void *), void *argument) 
         thread_mutex_unlock(&pool->lock);
         return -1;
     }
+
     printf("[pool] add task %d\n", pool->head);
 
-    pool->queue[pool->head].function = function;
-    pool->queue[pool->head].argument = argument;
-    pool->head = (pool->head + 1) % pool->queue_size;
-    pool->task_count++;
+    struct thread_pool_task task;
+    task.function = function;
+    task.argument = argument;
+    add_task(pool, task);
 
     thread_cond_signal(&pool->full);
     thread_mutex_unlock(&pool->lock);
@@ -99,8 +127,6 @@ void *worker(void *arg) {
     const int worker_idx = worker_args->id;
     thread_mutex_unlock(&pool->lock);
 
-
-    // Set shutdown flag
     printf("[worker %d] start polling\n", worker_idx);
     for (;;) {
         printf("[worker %d] waiting for task\n", worker_idx);
@@ -118,24 +144,17 @@ void *worker(void *arg) {
             break;
         }
 
-
-        const int idx = pool->tail;
-        // printf("[worker %d] pick task %d\n", worker_idx, idx);
-        task.function = pool->queue[pool->tail].function;
-        task.argument = pool->queue[pool->tail].argument;
-
-        pool->tail = (pool->tail + 1) % pool->queue_size;
-        pool->task_count--;
+        task = pick_task(pool);
 
         thread_cond_signal(&pool->empty);
         thread_mutex_unlock(&pool->lock);
 
-        printf("[worker %d] start task %d\n", worker_idx, idx);
+        printf("[worker %d] start task\n", worker_idx);
         const double t1 = get_seconds();
         task.function(task.argument);
         const double t2 = get_seconds();
-        printf("[worker %d] finish task %d\n[worker %d] run task %d for %.2f seconds\n",
-               worker_idx, idx, worker_idx, idx, t2 - t1);
+        printf("[worker %d] finish task\n[worker %d] run task for %.2f seconds\n", worker_idx,
+               worker_idx, t2 - t1);
     }
 
     printf("[worker %d] === exit ===\n", worker_idx);
@@ -151,7 +170,6 @@ int thread_pool_destroy(thread_pool *pool) {
     thread_mutex_lock(&pool->lock);
     printf("[pool] send signal shutdown\n");
     pool->shutdown = 1;
-    // thread_cond_broadcast(&pool->cond);
     thread_cond_broadcast(&pool->full);
     thread_mutex_unlock(&pool->lock);
     printf("[pool] thread_pool_destroy\n");
