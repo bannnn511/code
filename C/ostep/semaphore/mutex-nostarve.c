@@ -77,7 +77,7 @@ typedef struct __tinfo_t
   int thread_id;
 } tinfo_t;
 
-void *worker(void *arg)
+void *worker(const void *arg)
 {
   tinfo_t *t = (tinfo_t *)arg;
 

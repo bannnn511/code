@@ -13,4 +13,23 @@ cond_var = executable('cond_var', 'conditional_variable.c', install : true)
 reader_writer = executable('reader_writer', 'reader_writer.c', install : true)
 fork_join = executable('fork_join', 'fork_join.c', install : true)
 
+
+# Webserver sources
+webserver_sources = [
+    'unix/webserver/src/wserver.c',
+    'unix/webserver/src/request.c',
+    'unix/webserver/src/io_helper.c',
+    'unix/webserver/src/threadpool.c',
+    'unix/webserver/src/heap.c'
+]
+
+# Webserver executable
+wserver = executable('wserver',
+                     webserver_sources,
+                     include_directories : include_directories('unix/webserver/src'),
+                     install : true
+)
+
+
+
 test('test', C)

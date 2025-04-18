@@ -5,21 +5,19 @@
 #ifndef THREADPOOL_H
 #define THREADPOOL_H
 
-#include "thread_helper.h"
-#include <pthread.h>
-#include <semaphore.h>
-#include "heap.c"
+#include "heap.h"
 
 typedef struct thread_pool_task {
     void (*function)(void *);
 
     void *argument;
     int file_size;
+    int conn_fd;
 } thread_pool_task;
 
 typedef enum thread_pool_policy {
-    THREAD_POOL_POLICY_FIFO = 0,  // First-in, first-out scheduling
-    THREAD_POOL_POLICY_SFF,       // Smallest file first
+    THREAD_POOL_POLICY_FIFO = 0, // First-in, first-out scheduling
+    THREAD_POOL_POLICY_SFF, // Smallest file first
 } thread_pool_policy;
 
 typedef struct thread_pool {
@@ -27,8 +25,8 @@ typedef struct thread_pool {
     pthread_cond_t full;
     pthread_cond_t empty;
     pthread_cond_t cond;
-    thread_pool_task *queue;  // for FIFO queue
-    heap_t sff_queue;         // for smallest file first queue
+    thread_pool_task *queue; // for FIFO queue
+    heap_t *sff_queue; // for smallest file first queue
     pthread_t *threads;
     int queue_size;
     int task_count;

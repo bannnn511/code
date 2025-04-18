@@ -47,7 +47,7 @@ typedef struct __thread_arg_t {
     int vector_1;
 } thread_arg_t;
 
-void *worker(void *arg) {
+void *worker(const void *arg) {
     thread_arg_t *args = (thread_arg_t *) arg;
     int i, v0, v1;
     for (i = 0; i < loops; i++) {

@@ -7,34 +7,59 @@
 
 char default_root[] = ".";
 
-void *spawn_thread_conn(void *arg);
+void *connection_handler(void *arg);
+
 
 //
 // ./wserver [-d <basedir>] [-p <portnum>]
 //
-int main(int argc, char *argv[]) {
+int main(const int argc, char *argv[]) {
     int c;
-    char *root_dir = default_root;
+    const char *root_dir = default_root;
     int port = 10000;
     int threads = 2;
     int buffersize = 1;
+    int policy = THREAD_POOL_POLICY_FIFO;
 
-    while ((c = getopt(argc, argv, "d:p:t:b:")) != -1) switch (c) {
+    while ((c = getopt(argc, argv, "d:p:t:b:s:")) != -1)
+        switch (c) {
             case 'd':
                 root_dir = optarg;
                 break;
             case 'p':
-                port = atoi(optarg);
+                port = strtol(optarg, NULL, 10);
+                if (port < 0 || port > 65535) {
+                    fprintf(stderr, "port number out of range\n");
+                    exit(1);
+                }
                 break;
             case 't':
-                threads = atoi(optarg);
+                threads = strtol(optarg, NULL, 10);
+                if (threads <= 0) {
+                    fprintf(stderr, "thread count must be positive\n");
+                    exit(1);
+                }
                 break;
             case 'b':
-                buffersize = atoi(optarg);
+                buffersize = strtol(optarg, NULL, 10);
+                if (buffersize <= 0) {
+                    fprintf(stderr, "buffer size must be positive\n");
+                    exit(1);
+                }
+                break;
+            case 's':
+                if (strcmp(optarg, "fifo") == 0) {
+                    policy = THREAD_POOL_POLICY_FIFO;
+                } else if (strcmp(optarg, "sff") == 0) {
+                    policy = THREAD_POOL_POLICY_SFF;
+                } else {
+                    fprintf(stderr, "unknown policy: %s\n", optarg);
+                    exit(1);
+                }
                 break;
             default:
                 fprintf(stderr,
-                        "usage: wserver [-d basedir] [-p port] [-t threads] [-b buffersize]\n");
+                        "usage: wserver [-d basedir] [-p port] [-t threads] [-b buffersize] [-s schedalg]\n");
                 exit(1);
         }
 
@@ -42,33 +67,41 @@ int main(int argc, char *argv[]) {
     chdir_or_die(root_dir);
 
     thread_pool *pool = malloc(sizeof(thread_pool));
-    thread_pool_init(pool, threads, buffersize);
+    if (thread_pool_init(pool, threads, buffersize, policy) != 0) {
+        fprintf(stderr, "thread_pool_init failed\n");
+        exit(1);
+    }
 
-    // now, get to work
     const int listen_fd = open_listen_fd_or_die(port);
     while (1) {
         struct sockaddr_in client_addr;
         int client_len = sizeof(client_addr);
-        int conn_fd =
-            accept_or_die(listen_fd, (sockaddr_t *)&client_addr, (socklen_t *)&client_len);
+        long conn_fd =
+                accept(listen_fd, (sockaddr_t *) &client_addr, (socklen_t *) &client_len);
+        if (conn_fd < 0) {
+            perror("accept");
+            continue;
+        }
 
-        // pthread_t tid;
-        // thread_create_or_die(&tid, NULL, spawn_thread_conn, (void *)(intptr_t)conn_fd);
-        // pthread_detach(tid);
-
-        if (thread_pool_add(pool, (void *)spawn_thread_conn, (void *)conn_fd) == -1) {
+        printf("=== accept connection %ld\n", conn_fd);
+        if (thread_pool_add(pool, (void *) connection_handler, (void *) conn_fd) == -1) {
             fprintf(stderr, "fail to add task to worker\n");
+            close_or_die(conn_fd);
             break;
         }
     }
 
     thread_pool_wait(pool);
+    thread_pool_destroy(pool);
 
     return 0;
 }
 
-void *spawn_thread_conn(void *arg) {
-    int conn_fd = (int)arg;
+void *connection_handler(void *arg) {
+    long conn_fd = (long) arg;
     request_handle(conn_fd);
+    printf("=== close connection %ld\n", conn_fd);
     close_or_die(conn_fd);
+
+    return NULL;
 }
