@@ -33,13 +33,16 @@ wserver = executable('wserver',
 project_sources = [
     'projects/mapreduce/mapreduce.c',
     'projects/mapreduce/task_queue.c',
+    'projects/mapreduce/shard.c',
+    'projects/mapreduce/threadpool.c',
+    'projects/mapreduce/heap.c',
     'projects/mapreduce/tests/wordcount.c'
 ]
 
 mapreduce_test = executable('mapreduce_test',
                             project_sources,
                             #                            c_args : ['-Wall', '-Werror', '-O'],
-                            c_args : ['-Wall', '-Werror', '-Wno-unused-parameter'],
+                            c_args : ['-std=c23', '-Wall', '-Werror', '-Wno-unused-parameter', '-Wno-gnu-statement-expression'],
                             dependencies : [dependency('threads')],
                             install : true)
 

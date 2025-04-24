@@ -3,7 +3,6 @@
 #include <sys/stat.h>
 #include  <unistd.h>
 #include <stdio.h>
-#include <assert.h>
 
 int shard_size = 16;
 
@@ -100,4 +99,18 @@ void shard_file(vector *shards, char **file_names, int num_files) {
             append(shards, s);
         }
     }
+}
+
+int read_shard(shard s, char *buffer) {
+    FILE *f = fopen(s.file_name, "r");
+    if (f == NULL) {
+        return -1;
+    }
+
+    fseek(f, s.start, SEEK_SET);
+    size_t bytes_read = fread(buffer, 1, s.end - s.start, f);
+    buffer[bytes_read] = '\0';
+    fclose(f);
+
+    return 0;
 }

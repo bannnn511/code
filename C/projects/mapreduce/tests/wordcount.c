@@ -5,23 +5,42 @@
 #include "../mapreduce.h"
 
 
-void Map(char *file_name) {
-    FILE *fp = fopen(file_name, "r");
-    assert(fp != NULL);
+// void Map(char *file_name) {
+//     FILE *fp = fopen(file_name, "r");
+//     assert(fp != NULL);
+//
+//     char *line = NULL;
+//     size_t size = 0;
+//     while (getline(&line, &size, fp) != -1) {
+//         char *token, *dummy = line;
+//         while ((token = strsep(&dummy, " \t\n")) != NULL) {
+//             if (strlen(token) > 0) {
+//                 MR_Emit(token, "1");
+//             }
+//         }
+//     }
+//
+//     free(line);
+//     fclose(fp);
+// }
 
-    char *line = NULL;
-    size_t size = 0;
-    while (getline(&line, &size, fp) != -1) {
-        char *token, *dummy = line;
-        while ((token = strsep(&dummy, " \t\n")) != NULL) {
-            if (strlen(token) > 0) {
-                MR_Emit(token, "1");
-            }
+// new version of map to read from buffer instead of file to be more like mapreduce style
+void Map(char *buffer) {
+    char *line = strdup(buffer); // Create a copy since strsep modifies the string
+    if (line == NULL) {
+        perror("strdup");
+        exit(EXIT_FAILURE);
+    }
+    char *save_ptr = line;
+
+    char *token;
+    while ((token = strsep(&save_ptr, " \t\n")) != NULL) {
+        if (strlen(token) > 0) {
+            MR_Emit(token, "1");
         }
     }
 
     free(line);
-    fclose(fp);
 }
 
 void Reduce(char *key, Getter get_next, int partition_number) {
