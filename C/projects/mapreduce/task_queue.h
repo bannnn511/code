@@ -19,7 +19,7 @@ typedef struct task_queue {
     int capacity; // Capacity of the queue
 } task_queue;
 
-void init_task_queue(struct task_queue *q);
+int init_task_queue(struct task_queue *q);
 
 void destroy_task_queue(struct task_queue *q);
 
