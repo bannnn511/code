@@ -22,6 +22,7 @@ void append(vector *v, const shard x) {
     v->arr[v->size++] = x;
 }
 
+
 void delete_vector(vector *v) {
     if (v == NULL) {
         return;

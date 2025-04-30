@@ -9,9 +9,11 @@
 
 // int shard_size = 16 * 1024; // 16kb
 
+#define PATH_MAX 256
+
 Partitioner partitioner;
 int num_partitions = 1;
-char *intermediate_file = "/local/tasktracker/";
+char *intermediate_file = "./tasktracker";
 
 void map_worker(shard s, Mapper umap_func);
 
@@ -24,11 +26,12 @@ typedef struct {
 } KeyValueBuffer;
 
 KeyValueBuffer *buffers = NULL;
-int buffer_capacity = 50;
-int flush_threshold = 100;    // when to flush to disk
-int flush_interval_sec = 10;  // flush every 10 seconds
+int buffer_capacity = 2;
+int flush_threshold = 100; // when to flush to disk
+int flush_interval_sec = 1; // flush every 10 seconds
 
-void init_buffers() {
+// init_buffers run after files are sharded
+void init_buffers(int num_partitions) {
     if (buffers != NULL) {
         return;
     }
@@ -41,48 +44,94 @@ void init_buffers() {
 
     time_t current_time = time(NULL);
     for (int i = 0; i < num_partitions; i++) {
+        buffers[i].keys = malloc(buffer_capacity * sizeof(char *));
+        buffers[i].values = malloc(buffer_capacity * sizeof(char *));
+        if (buffers[i].keys == NULL || buffers[i].values == NULL) {
+            perror("[ERROR][mapreduce.c][init_buffers] malloc");
+            exit(EXIT_FAILURE);
+        }
+
         buffers[i].size = 0;
         buffers[i].capacity = buffer_capacity;
         buffers[i].last_flush = current_time;
     }
 }
 
-void flush_buffer(int partition_number) {
-    KeyValueBuffer buffer = buffers[partition_number];
-    if (buffer.size == 0) {
-        return;
+void create_intermediate_dir(char **filename_ptr, int partition_number) {
+    struct stat st;
+    if (stat(intermediate_file, &st) == -1) {
+        if (mkdir(intermediate_file, 0755) == -1) {
+            perror("mkdir");
+            exit(EXIT_FAILURE);
+        }
     }
 
-    char filename[256];
-    sprintf("%s/intermidiate_%d.txt", intermediate_file, partition_number);
-    FILE *fp = fopen(filename, "a");
-    if (fp == NULL) {
-        perror("fopen");
+    int len = strlen(intermediate_file) + strlen("/intermidiate_") + 10;
+
+    char *filename = malloc(len);
+    if (filename == NULL) {
+        perror("malloc");
         exit(EXIT_FAILURE);
     }
 
-    for (int i = 0; i < buffer.size; i++) {
-        fprintf(fp, "%s\t%s\t", buffer.keys[i], buffer.values[i]);
-        free(buffer.keys[i]);
-        free(buffer.values[i]);
+    if (snprintf(filename, len, "%s/intermediate_%d.txt",
+                 intermediate_file, partition_number) >= len) {
+        free(filename);
+        fprintf(stderr, "Path too long\n");
+        exit(EXIT_FAILURE);
     }
 
-    buffer.last_flush = time(NULL);
-    buffer.size = 0;
+    *filename_ptr = filename;
+}
+
+void flush_buffer(int partition_number) {
+    printf("[INFO][mapreduce.c] flush_buffer partition %d\n", partition_number);
+    KeyValueBuffer *buffer = &buffers[partition_number];
+    if (buffer->size == 0) {
+        return;
+    }
+
+
+    char *filename;
+    create_intermediate_dir(&filename, partition_number);
+    FILE *fp = fopen(filename, "a");
+    if (fp == NULL) {
+        // fp = fopen(filename, "w");
+        // if (fp == NULL) {
+        perror("fopen");
+        exit(EXIT_FAILURE);
+        // }
+    }
+
+    for (int i = 0; i < buffer->size; i++) {
+        fprintf(fp, "%s\t%s\t", buffer->keys[i], buffer->values[i]);
+        free(buffer->keys[i]);
+        free(buffer->values[i]);
+    }
+
+    buffer->last_flush = time(NULL);
+    buffer->size = 0;
 }
 
 void append_buffer(int partition_number, char *key, char *value) {
-    KeyValueBuffer buffer = buffers[partition_number];
-    if (buffer.size == buffer.capacity) {
+    if (buffers == NULL || partition_number < 0 || partition_number >= num_partitions) {
+        fprintf(stderr, "[ERROR][mapreduce.c] append_buffer: invalid partition number %d\n", partition_number);
+        return;
+    }
+
+    KeyValueBuffer *buffer = &buffers[partition_number];
+    printf("[INFO][mapreduce.c] append_buffer partition %d\n", partition_number);
+    if (buffer->size == buffer->capacity) {
         flush_buffer(partition_number);
     }
-    buffer.keys[buffer.size] = key;
-    buffer.values[buffer.size] = value;
-    buffer.size++;
+
+    printf("[INFO][mapreduce.c] append_buffer key %s value %s\n", key, value);
+    buffer->keys[buffer->size] = strdup(key);
+    buffer->values[buffer->size] = strdup(value);
+    buffer->size++;
 }
 
 void check_timed_flushed() {
-    printf("in check_time_flushed\n");
     if (buffers == NULL) {
         return;
     }
@@ -95,6 +144,7 @@ void check_timed_flushed() {
         }
 
         if (difftime(current_time, buffer.last_flush) > 0) {
+            printf("[INFO][mapreduce.c] timed flush partition %d\n", i);
             flush_buffer(i);
         }
     }
@@ -107,17 +157,19 @@ char *get_next(char *key, int partition_number) {
 }
 
 void MR_Emit(char *key, char *value) {
-    printf("%s %s\n", key, value);
+    printf("[DEBUG][MR_EMIT] emit %s %s\n", key, value);
     int partition_no = partitioner(key, num_partitions);
 
-    printf("check flush\n");
     check_timed_flushed();
 
-    printf("append buffer\n");
     append_buffer(partition_no, key, value);
+
+    // flush remaining in buffer
+    flush_buffer(partition_no);
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
+    printf("[INFO][Partition]\n");
     unsigned long hash = 5381;
     unsigned char c;
     while ((c = *key++) != '\0') {
@@ -138,7 +190,7 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
         return;
     }
 
-    init_buffers();
+    partitioner = partition;
 
     // 1. split input files into shards
     char **files = malloc(argc * sizeof(char *));
@@ -152,13 +204,13 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
     }
 
     shard_file(s, files, argc - 1);
-    printf("shard_file done");
+    num_partitions = s->size;
+    init_buffers(num_partitions);
+    printf("shard_file done\n");
+
     for (int i = 0; i < s->size; i++) {
         map_worker(s->arr[i], map);
     }
-
-    partitioner = partition;
-    num_partitions = s->size;
 
     // 2. start worker pools
     // thread_pool *pool = malloc(sizeof(thread_pool));
@@ -181,7 +233,7 @@ typedef struct key_value {
 
 typedef struct map_task {
     shard s;
-    key_value *paris;  // key-value pair buffer in memory
+    key_value *paris; // key-value pair buffer in memory
 } map_task;
 
 void map_worker(shard s, Mapper map) {

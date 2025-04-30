@@ -140,7 +140,7 @@ int main() {
         }
         printf("server: socks ready\n");
 
-        // new socket connnection from client
+        // new socket connection from client
         if (FD_ISSET(socket_fd, &read_fds)) {
             printf("server: new connection\n");
             struct sockaddr_storage their_addr;
