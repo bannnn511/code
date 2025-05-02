@@ -6,16 +6,24 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <pthread.h>
+#include <stdbool.h>
 
 // int shard_size = 16 * 1024; // 16kb
 
 #define PATH_MAX 256
 
 Partitioner partitioner;
-int num_partitions = 1;
+unsigned long num_partitions = 1;
 char *intermediate_file = "./tasktracker";
 
-void map_worker(shard s, Mapper umap_func);
+void map_worker(shard s, Mapper map);
+
+void notify_partition_complete(int partition_number);
+
+void wait_for_partition(int partition_number);
+
+void init_partition_status(const int num_partitions);
 
 typedef struct {
     char **keys;
@@ -31,7 +39,7 @@ int flush_threshold = 100; // when to flush to disk
 int flush_interval_sec = 1; // flush every 10 seconds
 
 // init_buffers run after files are sharded
-void init_buffers(int num_partitions) {
+void init_buffers(const int num_partitions) {
     if (buffers != NULL) {
         return;
     }
@@ -57,7 +65,7 @@ void init_buffers(int num_partitions) {
     }
 }
 
-void create_intermediate_dir(char **filename_ptr, int partition_number) {
+void create_intermediate_dir(char **filename_ptr, const unsigned long partition_number) {
     struct stat st;
     if (stat(intermediate_file, &st) == -1) {
         if (mkdir(intermediate_file, 0755) == -1) {
@@ -66,7 +74,7 @@ void create_intermediate_dir(char **filename_ptr, int partition_number) {
         }
     }
 
-    int len = strlen(intermediate_file) + strlen("/intermidiate_") + 10;
+    unsigned long len = strlen(intermediate_file) + strlen("/intermidiate_") + 10;
 
     char *filename = malloc(len);
     if (filename == NULL) {
@@ -74,18 +82,12 @@ void create_intermediate_dir(char **filename_ptr, int partition_number) {
         exit(EXIT_FAILURE);
     }
 
-    if (snprintf(filename, len, "%s/intermediate_%d.txt",
-                 intermediate_file, partition_number) >= len) {
-        free(filename);
-        fprintf(stderr, "Path too long\n");
-        exit(EXIT_FAILURE);
-    }
-
+    snprintf(filename, len, "%s/intermediate_%ld.txt", intermediate_file, partition_number);
     *filename_ptr = filename;
 }
 
-void flush_buffer(int partition_number) {
-    printf("[INFO][mapreduce.c] flush_buffer partition %d\n", partition_number);
+void flush_buffer(const unsigned long partition_number) {
+    printf("[INFO][mapreduce.c] flush_buffer partition %lu\n", partition_number);
     KeyValueBuffer *buffer = &buffers[partition_number];
     if (buffer->size == 0) {
         return;
@@ -96,11 +98,8 @@ void flush_buffer(int partition_number) {
     create_intermediate_dir(&filename, partition_number);
     FILE *fp = fopen(filename, "a");
     if (fp == NULL) {
-        // fp = fopen(filename, "w");
-        // if (fp == NULL) {
         perror("fopen");
         exit(EXIT_FAILURE);
-        // }
     }
 
     for (int i = 0; i < buffer->size; i++) {
@@ -113,14 +112,37 @@ void flush_buffer(int partition_number) {
     buffer->size = 0;
 }
 
-void append_buffer(int partition_number, char *key, char *value) {
-    if (buffers == NULL || partition_number < 0 || partition_number >= num_partitions) {
-        fprintf(stderr, "[ERROR][mapreduce.c] append_buffer: invalid partition number %d\n", partition_number);
+
+void check_timed_flushed() {
+    if (buffers == NULL) {
         return;
     }
 
+    const time_t current_time = time(NULL);
+    for (unsigned long i = 0; i < num_partitions; i++) {
+        const KeyValueBuffer buffer = buffers[i];
+        if (buffer.size < 0) {
+            continue;
+        }
+
+        if (difftime(current_time, buffer.last_flush) > 0) {
+            printf("[INFO][mapreduce.c] timed flush partition %lu\n", i);
+            flush_buffer(i);
+        }
+    }
+}
+
+// append_buffer flushes buffer if exceed time threshhold or capacity
+void append_buffer(const unsigned long partition_number, char *key, char *value) {
+    if (buffers == NULL || partition_number >= num_partitions) {
+        fprintf(stderr, "[ERROR][mapreduce.c] append_buffer: invalid partition number %ld\n", partition_number);
+        return;
+    }
+
+    check_timed_flushed();
+
     KeyValueBuffer *buffer = &buffers[partition_number];
-    printf("[INFO][mapreduce.c] append_buffer partition %d\n", partition_number);
+    printf("[INFO][mapreduce.c] append_buffer partition %ld\n", partition_number);
     if (buffer->size == buffer->capacity) {
         flush_buffer(partition_number);
     }
@@ -131,24 +153,6 @@ void append_buffer(int partition_number, char *key, char *value) {
     buffer->size++;
 }
 
-void check_timed_flushed() {
-    if (buffers == NULL) {
-        return;
-    }
-
-    time_t current_time = time(NULL);
-    for (int i = 0; i < num_partitions; i++) {
-        KeyValueBuffer buffer = buffers[i];
-        if (buffer.size < 0) {
-            continue;
-        }
-
-        if (difftime(current_time, buffer.last_flush) > 0) {
-            printf("[INFO][mapreduce.c] timed flush partition %d\n", i);
-            flush_buffer(i);
-        }
-    }
-}
 
 char *get_next(char *key, int partition_number) {
     char *value = "a";
@@ -156,16 +160,12 @@ char *get_next(char *key, int partition_number) {
     return value;
 }
 
+// MR_Emit should not flush buffer
 void MR_Emit(char *key, char *value) {
     printf("[DEBUG][MR_EMIT] emit %s %s\n", key, value);
-    int partition_no = partitioner(key, num_partitions);
-
-    check_timed_flushed();
+    const unsigned long partition_no = partitioner(key, num_partitions);
 
     append_buffer(partition_no, key, value);
-
-    // flush remaining in buffer
-    flush_buffer(partition_no);
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
@@ -204,12 +204,17 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
     }
 
     shard_file(s, files, argc - 1);
-    num_partitions = s->size;
+    num_partitions = num_reducers;
     init_buffers(num_partitions);
-    printf("shard_file done\n");
+    init_partition_status(num_partitions);
 
     for (int i = 0; i < s->size; i++) {
         map_worker(s->arr[i], map);
+    }
+
+    for (unsigned long i = 0; i < num_partitions; i++) {
+        flush_buffer(i);
+        notify_partition_complete(i);
     }
 
     // 2. start worker pools
@@ -219,6 +224,12 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
     //     exit(EXIT_FAILURE);
     // }
 
+    // Start reducers when partitions are ready
+    for (int i = 0; i < num_reducers; i++) {
+        wait_for_partition(i);
+        reduce(NULL, get_next, i);
+    }
+
     printf("done\n");
 
     free(files);
@@ -226,17 +237,57 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
     // free(pool);
 }
 
-typedef struct key_value {
-    char *key;
-    char *value;
-} key_value;
+typedef struct partition_status {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    int completed_mappers;
+    int total_mappers;
+    bool is_ready;
+} partition_status;
 
-typedef struct map_task {
-    shard s;
-    key_value *paris; // key-value pair buffer in memory
-} map_task;
+// Add to global variables
+partition_status *partition_statuses = NULL;
 
-void map_worker(shard s, Mapper map) {
+// Initialize the status tracking system
+void init_partition_status(const int num_partitions) {
+    partition_statuses = calloc(num_partitions, sizeof(partition_status));
+    if (!partition_statuses) {
+        perror("calloc");
+        exit(EXIT_FAILURE);
+    }
+
+    for (int i = 0; i < num_partitions; i++) {
+        if (pthread_mutex_init(&partition_statuses[i].mutex, NULL) != 0 ||
+            pthread_cond_init(&partition_statuses[i].cond, NULL) != 0) {
+            perror("pthread_mutex/cond_init");
+            exit(EXIT_FAILURE);
+        }
+        partition_statuses[i].is_ready = false;
+    }
+}
+
+void wait_for_partition(const int partition_number) {
+    printf("wait_for_partition %d\n", partition_number);
+    pthread_mutex_lock(&partition_statuses[partition_number].mutex);
+    while (!partition_statuses[partition_number].is_ready) {
+        pthread_cond_wait(&partition_statuses[partition_number].cond,
+                          &partition_statuses[partition_number].mutex);
+    }
+    pthread_mutex_unlock(&partition_statuses[partition_number].mutex);
+}
+
+void notify_partition_complete(const int partition_number) {
+    printf("notify_partition_complete %d\n", partition_number);
+    pthread_mutex_lock(&partition_statuses[partition_number].mutex);
+
+    partition_statuses[partition_number].is_ready = true;
+
+    pthread_cond_broadcast(&partition_statuses[partition_number].cond);
+    pthread_mutex_unlock(&partition_statuses[partition_number].mutex);
+}
+
+
+void map_worker(const shard s, const Mapper map) {
     const size_t buffer_size = s.end - s.start + 1;
     char *buffer = malloc(buffer_size);
     if (buffer == NULL) {
@@ -250,4 +301,5 @@ void map_worker(shard s, Mapper map) {
 
     map(buffer);
     free(buffer);
+    // TODO: notifiy master
 }
