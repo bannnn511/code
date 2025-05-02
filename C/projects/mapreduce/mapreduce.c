@@ -19,7 +19,7 @@ char *intermediate_file = "./tasktracker";
 
 void map_worker(shard s, Mapper map);
 
-void reduce_worker(ul partition_number);
+void reduce_worker(Reducer reducer, ul partition_number);
 
 void notify_partition_complete(ul partition_number);
 
@@ -106,12 +106,13 @@ void flush_buffer(const ul partition_number) {
     }
 
     for (int i = 0; i < buffer->size; i++) {
-        fprintf(fp, "%s\t%s\t", buffer->keys[i], buffer->values[i]);
+        fprintf(fp, "%s\t%s\n", buffer->keys[i], buffer->values[i]);
         printf("write to partition %ld", partition_number);
         free(buffer->keys[i]);
         free(buffer->values[i]);
     }
 
+    fflush(fp);
     buffer->last_flush = time(NULL);
     buffer->size = 0;
 }
@@ -228,7 +229,7 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
     for (int i = 0; i < num_reducers; i++) {
         wait_for_partition(i);
         // reduce(NULL, get_next, i);
-        reduce_worker(i);
+        reduce_worker(reduce, i);
     }
 
     printf("done\n");
@@ -302,70 +303,66 @@ void map_worker(const shard s, const Mapper map) {
     free(buffer);
 }
 
-void reduce_worker(const ul partition_number) {
-    // Create file path
+typedef struct {
+    char *key;
+    char **values;
+    size_t value_count;
+    size_t value_capacity;
+} KeyValues;
+
+void process_key_values(KeyValues *kv, const ul partition_number) {
     ul len = strlen(intermediate_file) + strlen("/intermediate_") + 10;
     char *filename = malloc(len);
-    if (filename == NULL) {
+    if (!filename) {
         perror("malloc");
-        exit(EXIT_FAILURE);
+        return;
     }
     snprintf(filename, len, "%s/intermediate_%ld.txt", intermediate_file, partition_number);
 
-    // Open file
     FILE *fp = fopen(filename, "r");
-    if (fp == NULL) {
+    if (!fp) {
         free(filename);
         return;
     }
 
     char *line = NULL;
     size_t size = 0;
-    ssize_t read;
-
-    // Hash table to store unique keys
-    struct {
-        char *key;
-        bool processed;
-    } *unique_keys = NULL;
     size_t num_keys = 0;
 
-    // First pass: collect unique keys
-    while ((read = getline(&line, &size, fp)) != -1) {
+    while (getline(&line, &size, fp) != -1) {
         char *key = strtok(line, "\t");
-        if (key == NULL) continue;
+        char *value = strtok(NULL, "\t");
+        if (!key || !value) continue;
 
-        // Add to unique keys if not already present
-        bool found = false;
         for (size_t i = 0; i < num_keys; i++) {
-            if (strcmp(unique_keys[i].key, key) == 0) {
-                found = true;
+            if (strcmp(kv[i].key, key) == 0) {
+                kv = &kv[i];
                 break;
             }
         }
 
-        if (!found) {
-            unique_keys = realloc(unique_keys, (num_keys + 1) * sizeof(*unique_keys));
-            unique_keys[num_keys].key = strdup(key);
-            unique_keys[num_keys].processed = false;
-            num_keys++;
+        if (!kv) {
+            kv = realloc(kv, (num_keys + 1) * sizeof(KeyValues));
+            kv = &kv[num_keys++];
+            kv->key = strdup(key);
+            kv->values = malloc(10 * sizeof(char *));
+            kv->value_count = 0;
+            kv->value_capacity = 10;
         }
-    }
 
-    // Process each unique key
-    for (size_t i = 0; i < num_keys; i++) {
-        if (!unique_keys[i].processed) {
-            // reduce(unique_keys[i].key, get_next, partition_number);
-            unique_keys[i].processed = true;
+        // Add value
+        if (kv->value_count == kv->value_capacity) {
+            kv->value_capacity *= 2;
+            kv->values = realloc(kv->values, kv->value_capacity * sizeof(char *));
         }
+        kv->values[kv->value_count++] = strdup(value);
     }
+}
 
-    // Cleanup
-    for (size_t i = 0; i < num_keys; i++) {
-        free(unique_keys[i].key);
+void reduce_worker(const Reducer reduce, const ul partition_number) {
+    KeyValues *kv = NULL;
+    process_key_values(kv, partition_number);
+    if (kv != NULL) {
+        free(kv);
     }
-    free(unique_keys);
-    free(line);
-    free(filename);
-    fclose(fp);
 }
