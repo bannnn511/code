@@ -64,6 +64,11 @@ void shard_file(vector *shards, char **file_names, int num_files) {
             continue;
         }
 
+        FILE *fp = fopen(file_names[i], "r");
+        if (!fp) {
+            continue;
+        }
+
         size_t total_size = 0;
         while (total_size < (size_t) file_size) {
             shard s = {
@@ -72,33 +77,25 @@ void shard_file(vector *shards, char **file_names, int num_files) {
                 .end = total_size + shard_size
             };
 
-            if ((size_t) s.end > (size_t) file_size) {
+            if ((size_t) s.end >= (size_t) file_size) {
                 s.end = file_size;
                 total_size = file_size;
             } else {
-                FILE *fp = fopen(s.file_name, "r");
-                if (!fp) {
-                    continue;
-                }
-
                 if (fseek(fp, s.end, SEEK_SET) != 0) {
-                    fclose(fp);
                     continue;
                 }
 
                 int c;
-                size_t extra_size = 0;
                 while ((c = fgetc(fp)) != EOF && c != ' ' && c != '\n') {
-                    extra_size++;
+                    s.end++;
                 }
-
-                s.end += extra_size;
                 total_size = s.end + 1;
-                fclose(fp);
             }
 
             append(shards, s);
         }
+
+        fclose(fp);
     }
 }
 

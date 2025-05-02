@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
-#include <time.h>
 #include <pthread.h>
 #include <stdbool.h>
 
@@ -13,17 +12,21 @@
 
 #define PATH_MAX 256
 
+typedef unsigned long ul;
 Partitioner partitioner;
-unsigned long num_partitions = 1;
+ul num_partitions = 1;
 char *intermediate_file = "./tasktracker";
 
 void map_worker(shard s, Mapper map);
 
-void notify_partition_complete(int partition_number);
+void reduce_worker(ul partition_number);
 
-void wait_for_partition(int partition_number);
+void notify_partition_complete(ul partition_number);
 
-void init_partition_status(const int num_partitions);
+void wait_for_partition(ul partition_number);
+
+void init_partition_status(ul num_partitions);
+
 
 typedef struct {
     char **keys;
@@ -34,12 +37,13 @@ typedef struct {
 } KeyValueBuffer;
 
 KeyValueBuffer *buffers = NULL;
-int buffer_capacity = 2;
+int buffer_capacity = 1000;
 int flush_threshold = 100; // when to flush to disk
-int flush_interval_sec = 1; // flush every 10 seconds
+int flush_interval_sec = 10; // flush every 10 seconds
+
 
 // init_buffers run after files are sharded
-void init_buffers(const int num_partitions) {
+void init_buffers(const ul num_partitions) {
     if (buffers != NULL) {
         return;
     }
@@ -51,7 +55,7 @@ void init_buffers(const int num_partitions) {
     }
 
     time_t current_time = time(NULL);
-    for (int i = 0; i < num_partitions; i++) {
+    for (ul i = 0; i < num_partitions; i++) {
         buffers[i].keys = malloc(buffer_capacity * sizeof(char *));
         buffers[i].values = malloc(buffer_capacity * sizeof(char *));
         if (buffers[i].keys == NULL || buffers[i].values == NULL) {
@@ -65,7 +69,7 @@ void init_buffers(const int num_partitions) {
     }
 }
 
-void create_intermediate_dir(char **filename_ptr, const unsigned long partition_number) {
+void create_intermediate_dir(char **filename_ptr, const ul partition_number) {
     struct stat st;
     if (stat(intermediate_file, &st) == -1) {
         if (mkdir(intermediate_file, 0755) == -1) {
@@ -74,7 +78,7 @@ void create_intermediate_dir(char **filename_ptr, const unsigned long partition_
         }
     }
 
-    unsigned long len = strlen(intermediate_file) + strlen("/intermidiate_") + 10;
+    ul len = strlen(intermediate_file) + strlen("/intermidiate_") + 10;
 
     char *filename = malloc(len);
     if (filename == NULL) {
@@ -86,8 +90,7 @@ void create_intermediate_dir(char **filename_ptr, const unsigned long partition_
     *filename_ptr = filename;
 }
 
-void flush_buffer(const unsigned long partition_number) {
-    printf("[INFO][mapreduce.c] flush_buffer partition %lu\n", partition_number);
+void flush_buffer(const ul partition_number) {
     KeyValueBuffer *buffer = &buffers[partition_number];
     if (buffer->size == 0) {
         return;
@@ -104,6 +107,7 @@ void flush_buffer(const unsigned long partition_number) {
 
     for (int i = 0; i < buffer->size; i++) {
         fprintf(fp, "%s\t%s\t", buffer->keys[i], buffer->values[i]);
+        printf("write to partition %ld", partition_number);
         free(buffer->keys[i]);
         free(buffer->values[i]);
     }
@@ -119,21 +123,20 @@ void check_timed_flushed() {
     }
 
     const time_t current_time = time(NULL);
-    for (unsigned long i = 0; i < num_partitions; i++) {
+    for (ul i = 0; i < num_partitions; i++) {
         const KeyValueBuffer buffer = buffers[i];
         if (buffer.size < 0) {
             continue;
         }
 
         if (difftime(current_time, buffer.last_flush) > 0) {
-            printf("[INFO][mapreduce.c] timed flush partition %lu\n", i);
             flush_buffer(i);
         }
     }
 }
 
 // append_buffer flushes buffer if exceed time threshhold or capacity
-void append_buffer(const unsigned long partition_number, char *key, char *value) {
+void append_buffer(const ul partition_number, char *key, char *value) {
     if (buffers == NULL || partition_number >= num_partitions) {
         fprintf(stderr, "[ERROR][mapreduce.c] append_buffer: invalid partition number %ld\n", partition_number);
         return;
@@ -142,12 +145,10 @@ void append_buffer(const unsigned long partition_number, char *key, char *value)
     check_timed_flushed();
 
     KeyValueBuffer *buffer = &buffers[partition_number];
-    printf("[INFO][mapreduce.c] append_buffer partition %ld\n", partition_number);
     if (buffer->size == buffer->capacity) {
         flush_buffer(partition_number);
     }
 
-    printf("[INFO][mapreduce.c] append_buffer key %s value %s\n", key, value);
     buffer->keys[buffer->size] = strdup(key);
     buffer->values[buffer->size] = strdup(value);
     buffer->size++;
@@ -155,6 +156,7 @@ void append_buffer(const unsigned long partition_number, char *key, char *value)
 
 
 char *get_next(char *key, int partition_number) {
+    // const ul partition_no = partitioner(key, num_partitions);
     char *value = "a";
 
     return value;
@@ -162,15 +164,13 @@ char *get_next(char *key, int partition_number) {
 
 // MR_Emit should not flush buffer
 void MR_Emit(char *key, char *value) {
-    printf("[DEBUG][MR_EMIT] emit %s %s\n", key, value);
-    const unsigned long partition_no = partitioner(key, num_partitions);
+    const ul partition_no = partitioner(key, num_partitions);
 
     append_buffer(partition_no, key, value);
 }
 
-unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
-    printf("[INFO][Partition]\n");
-    unsigned long hash = 5381;
+ul MR_DefaultHashPartition(char *key, const int num_partitions) {
+    ul hash = 5381;
     unsigned char c;
     while ((c = *key++) != '\0') {
         hash = hash * 33 + c;
@@ -212,7 +212,7 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
         map_worker(s->arr[i], map);
     }
 
-    for (unsigned long i = 0; i < num_partitions; i++) {
+    for (ul i = 0; i < num_partitions; i++) {
         flush_buffer(i);
         notify_partition_complete(i);
     }
@@ -227,7 +227,8 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
     // Start reducers when partitions are ready
     for (int i = 0; i < num_reducers; i++) {
         wait_for_partition(i);
-        reduce(NULL, get_next, i);
+        // reduce(NULL, get_next, i);
+        reduce_worker(i);
     }
 
     printf("done\n");
@@ -243,20 +244,21 @@ typedef struct partition_status {
     int completed_mappers;
     int total_mappers;
     bool is_ready;
+    bool has_data;
 } partition_status;
 
 // Add to global variables
 partition_status *partition_statuses = NULL;
 
 // Initialize the status tracking system
-void init_partition_status(const int num_partitions) {
+void init_partition_status(const ul num_partitions) {
     partition_statuses = calloc(num_partitions, sizeof(partition_status));
     if (!partition_statuses) {
         perror("calloc");
         exit(EXIT_FAILURE);
     }
 
-    for (int i = 0; i < num_partitions; i++) {
+    for (ul i = 0; i < num_partitions; i++) {
         if (pthread_mutex_init(&partition_statuses[i].mutex, NULL) != 0 ||
             pthread_cond_init(&partition_statuses[i].cond, NULL) != 0) {
             perror("pthread_mutex/cond_init");
@@ -266,8 +268,7 @@ void init_partition_status(const int num_partitions) {
     }
 }
 
-void wait_for_partition(const int partition_number) {
-    printf("wait_for_partition %d\n", partition_number);
+void wait_for_partition(const ul partition_number) {
     pthread_mutex_lock(&partition_statuses[partition_number].mutex);
     while (!partition_statuses[partition_number].is_ready) {
         pthread_cond_wait(&partition_statuses[partition_number].cond,
@@ -276,8 +277,7 @@ void wait_for_partition(const int partition_number) {
     pthread_mutex_unlock(&partition_statuses[partition_number].mutex);
 }
 
-void notify_partition_complete(const int partition_number) {
-    printf("notify_partition_complete %d\n", partition_number);
+void notify_partition_complete(const ul partition_number) {
     pthread_mutex_lock(&partition_statuses[partition_number].mutex);
 
     partition_statuses[partition_number].is_ready = true;
@@ -285,7 +285,6 @@ void notify_partition_complete(const int partition_number) {
     pthread_cond_broadcast(&partition_statuses[partition_number].cond);
     pthread_mutex_unlock(&partition_statuses[partition_number].mutex);
 }
-
 
 void map_worker(const shard s, const Mapper map) {
     const size_t buffer_size = s.end - s.start + 1;
@@ -301,5 +300,72 @@ void map_worker(const shard s, const Mapper map) {
 
     map(buffer);
     free(buffer);
-    // TODO: notifiy master
+}
+
+void reduce_worker(const ul partition_number) {
+    // Create file path
+    ul len = strlen(intermediate_file) + strlen("/intermediate_") + 10;
+    char *filename = malloc(len);
+    if (filename == NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+    snprintf(filename, len, "%s/intermediate_%ld.txt", intermediate_file, partition_number);
+
+    // Open file
+    FILE *fp = fopen(filename, "r");
+    if (fp == NULL) {
+        free(filename);
+        return;
+    }
+
+    char *line = NULL;
+    size_t size = 0;
+    ssize_t read;
+
+    // Hash table to store unique keys
+    struct {
+        char *key;
+        bool processed;
+    } *unique_keys = NULL;
+    size_t num_keys = 0;
+
+    // First pass: collect unique keys
+    while ((read = getline(&line, &size, fp)) != -1) {
+        char *key = strtok(line, "\t");
+        if (key == NULL) continue;
+
+        // Add to unique keys if not already present
+        bool found = false;
+        for (size_t i = 0; i < num_keys; i++) {
+            if (strcmp(unique_keys[i].key, key) == 0) {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            unique_keys = realloc(unique_keys, (num_keys + 1) * sizeof(*unique_keys));
+            unique_keys[num_keys].key = strdup(key);
+            unique_keys[num_keys].processed = false;
+            num_keys++;
+        }
+    }
+
+    // Process each unique key
+    for (size_t i = 0; i < num_keys; i++) {
+        if (!unique_keys[i].processed) {
+            // reduce(unique_keys[i].key, get_next, partition_number);
+            unique_keys[i].processed = true;
+        }
+    }
+
+    // Cleanup
+    for (size_t i = 0; i < num_keys; i++) {
+        free(unique_keys[i].key);
+    }
+    free(unique_keys);
+    free(line);
+    free(filename);
+    fclose(fp);
 }
