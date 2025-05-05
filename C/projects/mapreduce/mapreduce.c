@@ -1,3 +1,4 @@
+
 #include "mapreduce.h"
 #include "shard.h"
 #include <string.h>
@@ -7,6 +8,7 @@
 #include <sys/stat.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include "kv.h"
 
 // int shard_size = 16 * 1024; // 16kb
 
@@ -182,7 +184,7 @@ ul MR_DefaultHashPartition(char *key, const int num_partitions) {
 
 /**
  * 1. split the input files into M pieces
- * 2. start workers, master give shards to workers
+ * 2. start workers, master gives shards to workers
  */
 void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers,
             Partitioner partition) {
@@ -303,14 +305,8 @@ void map_worker(const shard s, const Mapper map) {
     free(buffer);
 }
 
-typedef struct {
-    char *key;
-    char **values;
-    size_t value_count;
-    size_t value_capacity;
-} KeyValues;
 
-void process_key_values(KeyValues *kv, const ul partition_number) {
+void process_key_values(KeyValueStore *kv, const ul partition_number) {
     ul len = strlen(intermediate_file) + strlen("/intermediate_") + 10;
     char *filename = malloc(len);
     if (!filename) {
@@ -327,42 +323,24 @@ void process_key_values(KeyValues *kv, const ul partition_number) {
 
     char *line = NULL;
     size_t size = 0;
-    size_t num_keys = 0;
 
     while (getline(&line, &size, fp) != -1) {
         char *key = strtok(line, "\t");
         char *value = strtok(NULL, "\t");
         if (!key || !value) continue;
 
-        for (size_t i = 0; i < num_keys; i++) {
-            if (strcmp(kv[i].key, key) == 0) {
-                kv = &kv[i];
-                break;
-            }
-        }
-
-        if (!kv) {
-            kv = realloc(kv, (num_keys + 1) * sizeof(KeyValues));
-            kv = &kv[num_keys++];
-            kv->key = strdup(key);
-            kv->values = malloc(10 * sizeof(char *));
-            kv->value_count = 0;
-            kv->value_capacity = 10;
-        }
-
-        // Add value
-        if (kv->value_count == kv->value_capacity) {
-            kv->value_capacity *= 2;
-            kv->values = realloc(kv->values, kv->value_capacity * sizeof(char *));
-        }
-        kv->values[kv->value_count++] = strdup(value);
+        kv_append(kv, key, value);
     }
 }
 
 void reduce_worker(const Reducer reduce, const ul partition_number) {
-    KeyValues *kv = NULL;
-    process_key_values(kv, partition_number);
-    if (kv != NULL) {
-        free(kv);
+    KeyValueStore *kvs = malloc(sizeof(KeyValueStore));
+    if (kvs == NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
     }
+
+    init_kvs(kvs);
+    process_key_values(kvs, partition_number);
+    free_kvs(kvs);
 }
