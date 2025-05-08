@@ -10,14 +10,19 @@ typedef struct {
 } KeyValue;
 
 typedef struct {
-   KeyValue *kvs;
+    KeyValue *kvs;
     size_t kv_count;
     size_t kv_capacity;
-}KeyValueStore;
+} KeyValueStore;
 
 void init_kvs(KeyValueStore *kv);
-void kv_append(KeyValueStore *kvs,const char *key,const char *value);
+
+void kv_append(KeyValueStore *kvs, const char *key, const char *value);
+
 void print_kv(KeyValueStore kv);
+
 void free_kvs(KeyValueStore *kv);
+
+char *kv_pop(const KeyValueStore *kv, const char *key);
 
 #endif //KV_H

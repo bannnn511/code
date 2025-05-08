@@ -21,7 +21,7 @@ char *intermediate_file = "./tasktracker";
 
 void map_worker(shard s, Mapper map);
 
-void reduce_worker(Reducer reducer, ul partition_number);
+void reduce_worker(Reducer reducer, Getter getter, ul partition_number);
 
 void notify_partition_complete(ul partition_number);
 
@@ -42,6 +42,7 @@ KeyValueBuffer *buffers = NULL;
 int buffer_capacity = 1000;
 int flush_threshold = 100; // when to flush to disk
 int flush_interval_sec = 10; // flush every 10 seconds
+KeyValueStore *store = NULL;
 
 
 // init_buffers run after files are sharded
@@ -109,7 +110,6 @@ void flush_buffer(const ul partition_number) {
 
     for (int i = 0; i < buffer->size; i++) {
         fprintf(fp, "%s\t%s\n", buffer->keys[i], buffer->values[i]);
-        printf("write to partition %ld", partition_number);
         free(buffer->keys[i]);
         free(buffer->values[i]);
     }
@@ -159,10 +159,13 @@ void append_buffer(const ul partition_number, char *key, char *value) {
 
 
 char *get_next(char *key, int partition_number) {
-    // const ul partition_no = partitioner(key, num_partitions);
-    char *value = "a";
+    KeyValueStore *kv = &store[partition_number];
+    if (kv == NULL) {
+        fprintf(stderr, "[ERROR][mapreduce.c] get_next: invalid partition number %d\n", partition_number);
+        return NULL;
+    }
 
-    return value;
+    return kv_pop(kv, key);
 }
 
 // MR_Emit should not flush buffer
@@ -210,6 +213,15 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
     num_partitions = num_reducers;
     init_buffers(num_partitions);
     init_partition_status(num_partitions);
+    store = calloc(num_partitions, sizeof(KeyValueStore));
+    if (store == NULL) {
+        perror("calloc");
+        exit(EXIT_FAILURE);
+    }
+    for (ul i = 0; i < num_partitions; i++) {
+        init_kvs(&store[i]);
+    }
+
 
     for (int i = 0; i < s->size; i++) {
         map_worker(s->arr[i], map);
@@ -230,8 +242,11 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
     // Start reducers when partitions are ready
     for (int i = 0; i < num_reducers; i++) {
         wait_for_partition(i);
-        // reduce(NULL, get_next, i);
-        reduce_worker(reduce, i);
+        reduce_worker(reduce, get_next, i);
+    }
+
+    for (ul i = 0; i < num_partitions; i++) {
+        free_kvs(&store[i]);
     }
 
     printf("done\n");
@@ -333,14 +348,16 @@ void process_key_values(KeyValueStore *kv, const ul partition_number) {
     }
 }
 
-void reduce_worker(const Reducer reduce, const ul partition_number) {
-    KeyValueStore *kvs = malloc(sizeof(KeyValueStore));
+void reduce_worker(const Reducer reduce, const Getter get_next, const ul partition_number) {
+    KeyValueStore *kvs = &store[partition_number];
     if (kvs == NULL) {
         perror("malloc");
         exit(EXIT_FAILURE);
     }
 
-    init_kvs(kvs);
     process_key_values(kvs, partition_number);
-    free_kvs(kvs);
+
+    for (int i = 0; i < kvs->kv_count; i++) {
+        reduce(kvs->kvs[i].key, get_next, partition_number);
+    }
 }

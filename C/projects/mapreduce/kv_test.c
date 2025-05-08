@@ -42,7 +42,7 @@ void test_kv_append_capacity() {
 
     init_kvs(kvs);
 
-    for(int i = 0; i < 12; i++) {
+    for (int i = 0; i < 12; i++) {
         char value[10];
         sprintf(value, "value%d", i);
         kv_append(kvs, "key1", value);
@@ -55,9 +55,40 @@ void test_kv_append_capacity() {
     print_kv(*kvs);
 }
 
+void test_kv_pop() {
+    KeyValueStore *kvs = malloc(sizeof(KeyValueStore));
+    if (kvs == NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+
+    init_kvs(kvs);
+
+    for (int i = 0; i < 12; i++) {
+        char value[10];
+        sprintf(value, "value%d", i);
+        kv_append(kvs, "key1", value);
+    }
+
+    assert(kvs->kvs[0].value_count == 12);
+
+
+    char *popped_value = kv_pop(kvs, "key1");
+    assert(popped_value != NULL);
+    printf("Popped value: %s\n", popped_value);
+    assert(strcmp(popped_value, "value0") == 0);
+    assert(kvs->kvs[0].value_count == 11);
+
+    popped_value = kv_pop(kvs, "key1");
+    assert(popped_value != NULL);
+    assert(strcmp(popped_value, "value1") == 0);
+    assert(kvs->kvs[0].value_count == 10);
+}
+
 int main() {
     test_kv_append_new();
     test_kv_append_capacity();
+    test_kv_pop();
 
 
     printf("All tests passed!\n");
