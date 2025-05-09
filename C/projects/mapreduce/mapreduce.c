@@ -29,7 +29,13 @@ typedef struct {
 
 void map_worker(void *arg);
 
-void reduce_worker(Reducer reducer, Getter getter, ul partition_number);
+typedef struct {
+    Reducer reduce;
+    Getter get_next;
+    ul partition_number;
+} reduce_worker_task;
+
+void reduce_worker(void *arg);
 
 void notify_partition_complete(ul partition_number);
 
@@ -227,20 +233,30 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
         init_kvs(&store[i]);
     }
 
-    thread_pool *pool = malloc(sizeof(thread_pool));
-    if (pool == NULL) {
+    thread_pool *mapper_pool = malloc(sizeof(thread_pool));
+    if (mapper_pool == NULL) {
         perror("malloc");
         exit(EXIT_FAILURE);
     }
 
-    thread_pool_init(pool, num_mappers, 10, 0);
+    thread_pool *reducer_pool = malloc(sizeof(thread_pool));
+    if (reducer_pool == NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+
+    thread_pool_init(mapper_pool, num_mappers, 10, 0);
+    thread_pool_init(reducer_pool, num_reducers, 10, 0);
     for (int i = 0; i < s->size; i++) {
         map_worker_task *task = malloc(sizeof(map_worker_task));
         *task = (map_worker_task){s->arr[i], map};
-        thread_pool_add(pool, (void *) map_worker, task);
+        thread_pool_add(mapper_pool, (void *) map_worker, task);
     }
 
-    thread_pool_wait(pool);
+    // wait for all mappers to finish
+    thread_pool_wait(mapper_pool);
+
+
     for (ul i = 0; i < num_partitions; i++) {
         flush_buffer(i);
         notify_partition_complete(i);
@@ -249,10 +265,16 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
     // Start reducers when partitions are ready
     for (int i = 0; i < num_reducers; i++) {
         wait_for_partition(i);
-        reduce_worker(reduce, get_next, i);
+        reduce_worker_task *task = malloc(sizeof(reduce_worker_task));
+        *task = (reduce_worker_task){reduce, get_next, i};
+        thread_pool_add(reducer_pool, (void *) reduce_worker, task);
     }
 
-    thread_pool_destroy(pool);
+    thread_pool_wait(reducer_pool);
+
+    // free resources
+    thread_pool_destroy(mapper_pool);
+    thread_pool_destroy(reducer_pool);
 
     for (ul i = 0; i < num_partitions; i++) {
         free_kvs(&store[i]);
@@ -357,16 +379,17 @@ void process_key_values(KeyValueStore *kv, const ul partition_number) {
     }
 }
 
-void reduce_worker(const Reducer reduce, const Getter get_next, const ul partition_number) {
-    KeyValueStore *kvs = &store[partition_number];
+void reduce_worker(void *arg) {
+    const reduce_worker_task *t = arg;
+    KeyValueStore *kvs = &store[t->partition_number];
     if (kvs == NULL) {
         perror("malloc");
         exit(EXIT_FAILURE);
     }
 
-    process_key_values(kvs, partition_number);
+    process_key_values(kvs, t->partition_number);
 
     for (int i = 0; i < kvs->kv_count; i++) {
-        reduce(kvs->kvs[i].key, get_next, partition_number);
+        t->reduce(kvs->kvs[i].key, get_next, t->partition_number);
     }
 }
