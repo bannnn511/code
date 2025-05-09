@@ -75,7 +75,6 @@ void test_kv_pop() {
 
     char *popped_value = kv_pop(kvs, "key1");
     assert(popped_value != NULL);
-    printf("Popped value: %s\n", popped_value);
     assert(strcmp(popped_value, "value0") == 0);
     assert(kvs->kvs[0].value_count == 11);
 
@@ -85,10 +84,43 @@ void test_kv_pop() {
     assert(kvs->kvs[0].value_count == 10);
 }
 
+void test_kv_sort() {
+    KeyValueStore *kvs = malloc(sizeof(KeyValueStore));
+    if (kvs == NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+
+    init_kvs(kvs);
+
+
+    kv_append(kvs, "key2", "value2");
+    kv_append(kvs, "key1", "value1");
+    kv_append(kvs, "key3", "value3");
+    kv_append(kvs, "key5", "value5");
+    kv_append(kvs, "key4", "value4");
+
+    printf("sort\n");
+    kv_sort(kvs);
+    printf("sort done\n");
+    assert(kvs->kvs[0].key != NULL);
+    assert(strcmp(kvs->kvs[0].key, "key1") == 0);
+    assert(kvs->kvs[1].key != NULL);
+    assert(strcmp(kvs->kvs[1].key, "key2") == 0);
+    assert(kvs->kvs[2].key != NULL);
+    assert(strcmp(kvs->kvs[2].key, "key3") == 0);
+    assert(kvs->kvs[3].key != NULL);
+    assert(strcmp(kvs->kvs[3].key, "key4") == 0);
+    assert(kvs->kvs[4].key != NULL);
+    assert(strcmp(kvs->kvs[4].key, "key5") == 0);
+    assert(kvs->kv_count == 5);
+}
+
 int main() {
     test_kv_append_new();
     test_kv_append_capacity();
     test_kv_pop();
+    test_kv_sort();
 
 
     printf("All tests passed!\n");

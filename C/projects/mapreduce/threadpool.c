@@ -108,7 +108,7 @@ void thread_pool_wait(thread_pool *pool) {
         thread_cond_wait(&pool->cond, &pool->lock);
     }
     thread_mutex_unlock(&pool->lock);
-    printf("[pool] finishes all tasks\n");
+    // printf("[pool] finishes all tasks\n");
 }
 
 void *worker(void *arg) {
@@ -132,7 +132,7 @@ void *worker(void *arg) {
 
         if (pool->shutdown) {
             thread_mutex_unlock(&pool->lock);
-            printf("[worker %d] shutdown\n", worker_idx);
+            // printf("[worker %d] shutdown\n", worker_idx);
             break;
         }
 
@@ -161,7 +161,7 @@ void *worker(void *arg) {
         free(task);
     }
 
-    printf("[worker %d] === exit ===\n", worker_idx);
+    // printf("[worker %d] === exit ===\n", worker_idx);
 
     pthread_exit(NULL);
 }

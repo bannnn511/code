@@ -361,7 +361,7 @@ void process_key_values(KeyValueStore *kv, const ul partition_number) {
     snprintf(filename, len, "%s/intermediate_%ld.txt", intermediate_file, partition_number);
 
     FILE *fp = fopen(filename, "r");
-    unlink(filename); // delete the file after reading
+    // unlink(filename); // delete the file after reading
     if (!fp) {
         free(filename);
         return;
@@ -388,6 +388,11 @@ void reduce_worker(void *arg) {
     }
 
     process_key_values(kvs, t->partition_number);
+    kv_sort(kvs);
+    // printf("sort paritition :%ld\n", t->partition_number);
+    // if (kvs->kvs != NULL) {
+    //     printf("partition key %s\n", kvs->kvs[0].key);
+    // }
 
     for (int i = 0; i < kvs->kv_count; i++) {
         t->reduce(kvs->kvs[i].key, get_next, t->partition_number);

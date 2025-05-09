@@ -25,6 +25,8 @@ void print_kv(KeyValueStore kv);
 
 void free_kvs(KeyValueStore *kv);
 
-char *kv_pop(const KeyValueStore *kv, const char *key);
+char *kv_pop(KeyValueStore *kv, const char *key);
+
+void kv_sort(KeyValueStore *kv);
 
 #endif //KV_H

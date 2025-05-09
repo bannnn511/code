@@ -12,7 +12,7 @@ void init_kvs(KeyValueStore *kv) {
     kv->kvs = NULL;
     kv->kv_count = 0;
     kv->kv_capacity = 10;
-    if (pthread_mutex_init(&kv->mu, NULL)==-1) {
+    if (pthread_mutex_init(&kv->mu, NULL) == -1) {
         perror("pthread_mutex_init");
         exit(EXIT_FAILURE);
     }
@@ -56,17 +56,21 @@ void kv_append(KeyValueStore *kv, const char *key, const char *value) {
         target->values = realloc(target->values, sizeof(char *) * target->value_capacity);
     }
     target->values[target->value_count++] = strdup(value);
+
     pthread_mutex_unlock(&kv->mu);
 }
 
-char *kv_pop(const KeyValueStore *kv, const char *key) {
+char *kv_pop(KeyValueStore *kv, const char *key) {
     if (!kv || !key || index < 0) {
         return NULL;
     }
 
+    pthread_mutex_lock(&kv->mu);
+
     for (size_t i = 0; i < kv->kv_count; i++) {
         if (strcmp(kv->kvs[i].key, key) == 0) {
             if (kv->kvs[i].value_count == 0) {
+                pthread_mutex_unlock(&kv->mu);
                 return NULL;
             }
             char *value = kv->kvs[i].values[0];
@@ -77,19 +81,38 @@ char *kv_pop(const KeyValueStore *kv, const char *key) {
             }
             kv->kvs[i].value_count--;
 
+            pthread_mutex_unlock(&kv->mu);
             return value;
         }
     }
+
+    pthread_mutex_unlock(&kv->mu);
+
     return NULL;
 }
 
-void sort_kvs(KeyValueStore *kv) {
+static int compare_kv(const void *a, const void *b) {
+    const KeyValue *kv1 = a;
+    const KeyValue *kv2 = b;
+    return strcmp(kv1->key, kv2->key);
+}
+
+void kv_sort(KeyValueStore *kv) {
+    if (!kv || !kv->kvs) {
+        return;
+    }
+
+    pthread_mutex_lock(&kv->mu);
+    qsort(kv->kvs, kv->kv_count, sizeof(KeyValue), compare_kv);
+    pthread_mutex_unlock(&kv->mu);
 }
 
 void free_kvs(KeyValueStore *kv) {
     if (!kv || !kv->kvs) {
         return;
     }
+
+    pthread_mutex_lock(&kv->mu);
 
     for (size_t i = 0; i < kv->kv_count; i++) {
         if (kv->kvs[i].key) {
@@ -110,6 +133,8 @@ void free_kvs(KeyValueStore *kv) {
     kv->kvs = NULL;
     kv->kv_count = 0;
     kv->kv_capacity = 0;
+
+    pthread_mutex_unlock(&kv->mu);
 }
 
 void print_kv(const KeyValueStore kv) {
