@@ -1,6 +1,7 @@
 #ifndef KV_H
 #define KV_H
 #include <stdio.h>
+#include <pthread.h>
 
 typedef struct {
     char *key;
@@ -10,6 +11,7 @@ typedef struct {
 } KeyValue;
 
 typedef struct {
+    pthread_mutex_t mu;
     KeyValue *kvs;
     size_t kv_count;
     size_t kv_capacity;

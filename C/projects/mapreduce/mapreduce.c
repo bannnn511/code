@@ -8,7 +8,10 @@
 #include <sys/stat.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <unistd.h>
+
 #include "kv.h"
+#include "threadpool.h"
 
 // int shard_size = 16 * 1024; // 16kb
 
@@ -19,7 +22,12 @@ Partitioner partitioner;
 ul num_partitions = 1;
 char *intermediate_file = "./tasktracker";
 
-void map_worker(shard s, Mapper map);
+typedef struct {
+    shard s;
+    Mapper map;
+} map_worker_task;
+
+void map_worker(void *arg);
 
 void reduce_worker(Reducer reducer, Getter getter, ul partition_number);
 
@@ -28,7 +36,6 @@ void notify_partition_complete(ul partition_number);
 void wait_for_partition(ul partition_number);
 
 void init_partition_status(ul num_partitions);
-
 
 typedef struct {
     char **keys;
@@ -43,7 +50,6 @@ int buffer_capacity = 1000;
 int flush_threshold = 100; // when to flush to disk
 int flush_interval_sec = 10; // flush every 10 seconds
 KeyValueStore *store = NULL;
-
 
 // init_buffers run after files are sharded
 void init_buffers(const ul num_partitions) {
@@ -99,7 +105,6 @@ void flush_buffer(const ul partition_number) {
         return;
     }
 
-
     char *filename;
     create_intermediate_dir(&filename, partition_number);
     FILE *fp = fopen(filename, "a");
@@ -118,7 +123,6 @@ void flush_buffer(const ul partition_number) {
     buffer->last_flush = time(NULL);
     buffer->size = 0;
 }
-
 
 void check_timed_flushed() {
     if (buffers == NULL) {
@@ -141,7 +145,8 @@ void check_timed_flushed() {
 // append_buffer flushes buffer if exceed time threshhold or capacity
 void append_buffer(const ul partition_number, char *key, char *value) {
     if (buffers == NULL || partition_number >= num_partitions) {
-        fprintf(stderr, "[ERROR][mapreduce.c] append_buffer: invalid partition number %ld\n", partition_number);
+        fprintf(stderr, "[ERROR][mapreduce.c] append_buffer: invalid partition number %ld\n",
+                partition_number);
         return;
     }
 
@@ -157,11 +162,11 @@ void append_buffer(const ul partition_number, char *key, char *value) {
     buffer->size++;
 }
 
-
 char *get_next(char *key, int partition_number) {
     KeyValueStore *kv = &store[partition_number];
     if (kv == NULL) {
-        fprintf(stderr, "[ERROR][mapreduce.c] get_next: invalid partition number %d\n", partition_number);
+        fprintf(stderr, "[ERROR][mapreduce.c] get_next: invalid partition number %d\n",
+                partition_number);
         return NULL;
     }
 
@@ -222,28 +227,32 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
         init_kvs(&store[i]);
     }
 
-
-    for (int i = 0; i < s->size; i++) {
-        map_worker(s->arr[i], map);
+    thread_pool *pool = malloc(sizeof(thread_pool));
+    if (pool == NULL) {
+        perror("malloc");
+        exit(EXIT_FAILURE);
     }
 
+    thread_pool_init(pool, num_mappers, 10, 0);
+    for (int i = 0; i < s->size; i++) {
+        map_worker_task *task = malloc(sizeof(map_worker_task));
+        *task = (map_worker_task){s->arr[i], map};
+        thread_pool_add(pool, (void *) map_worker, task);
+    }
+
+    thread_pool_wait(pool);
     for (ul i = 0; i < num_partitions; i++) {
         flush_buffer(i);
         notify_partition_complete(i);
     }
-
-    // 2. start worker pools
-    // thread_pool *pool = malloc(sizeof(thread_pool));
-    // if (pool == NULL) {
-    //     perror("malloc");
-    //     exit(EXIT_FAILURE);
-    // }
 
     // Start reducers when partitions are ready
     for (int i = 0; i < num_reducers; i++) {
         wait_for_partition(i);
         reduce_worker(reduce, get_next, i);
     }
+
+    thread_pool_destroy(pool);
 
     for (ul i = 0; i < num_partitions; i++) {
         free_kvs(&store[i]);
@@ -253,7 +262,6 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
 
     free(files);
     free(s);
-    // free(pool);
 }
 
 typedef struct partition_status {
@@ -304,22 +312,22 @@ void notify_partition_complete(const ul partition_number) {
     pthread_mutex_unlock(&partition_statuses[partition_number].mutex);
 }
 
-void map_worker(const shard s, const Mapper map) {
-    const size_t buffer_size = s.end - s.start + 1;
+void map_worker(void *arg) {
+    const map_worker_task t = *(map_worker_task *) arg;
+    const size_t buffer_size = t.s.end - t.s.start + 1;
     char *buffer = malloc(buffer_size);
     if (buffer == NULL) {
         perror("malloc");
         exit(EXIT_FAILURE);
     }
-    if (read_shard(s, buffer) == -1) {
+    if (read_shard(t.s, buffer) == -1) {
         fprintf(stderr, "readshard");
         exit(EXIT_FAILURE);
     }
 
-    map(buffer);
+    t.map(buffer);
     free(buffer);
 }
-
 
 void process_key_values(KeyValueStore *kv, const ul partition_number) {
     ul len = strlen(intermediate_file) + strlen("/intermediate_") + 10;
@@ -331,6 +339,7 @@ void process_key_values(KeyValueStore *kv, const ul partition_number) {
     snprintf(filename, len, "%s/intermediate_%ld.txt", intermediate_file, partition_number);
 
     FILE *fp = fopen(filename, "r");
+    unlink(filename); // delete the file after reading
     if (!fp) {
         free(filename);
         return;

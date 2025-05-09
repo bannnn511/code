@@ -6,6 +6,7 @@
 #include "thread_helper.h"
 #include <pthread.h>
 #include <sys/time.h>
+#include <stdint.h>
 
 struct worker_args {
     thread_pool *pool;
@@ -75,12 +76,12 @@ int thread_pool_add(thread_pool *pool, void (function)(void *), void *argument) 
 
     thread_mutex_lock(&pool->lock);
     while (pool->task_count == pool->queue_size && !pool->shutdown) {
-        printf("[pool] queue is full, waiting...\n");
+        // printf("[pool] queue is full, waiting...\n");
         thread_cond_wait(&pool->empty, &pool->lock);
     }
 
     if (pool->shutdown) {
-        printf("[pool] pool is shutting down, cannot add task\n");
+        // printf("[pool] pool is shutting down, cannot add task\n");
         thread_mutex_unlock(&pool->lock);
         return -1;
     }
@@ -97,7 +98,7 @@ int thread_pool_add(thread_pool *pool, void (function)(void *), void *argument) 
 }
 
 void thread_pool_wait(thread_pool *pool) {
-    printf("[pool] thread_pool_wait\n");
+    // printf("[pool] thread_pool_wait\n");
     if (pool == NULL) {
         return;
     }
@@ -120,11 +121,11 @@ void *worker(void *arg) {
 
     printf("[worker %d] start polling\n", worker_idx);
     for (;;) {
-        printf("[worker %d] waiting for task\n", worker_idx);
+        // printf("[worker %d] waiting for task\n", worker_idx);
         thread_mutex_lock(&pool->lock);
 
         while (pool->task_count == 0 && !pool->shutdown) {
-            printf("[worker %d] queue is empty, waiting...\n", worker_idx);
+            // printf("[worker %d] queue is empty, waiting...\n", worker_idx);
             thread_cond_broadcast(&pool->cond);
             thread_cond_wait(&pool->full, &pool->lock);
         }
@@ -142,20 +143,20 @@ void *worker(void *arg) {
             break;
         }
         pick_task(pool, task);
-        printf("worker %d pick task %d, file_size %d\n", worker_idx, task->conn_fd, task->file_size);
+        // printf("worker %d pick task %d, file_size %d\n", worker_idx, task->conn_fd, task->file_size);
 
         thread_cond_signal(&pool->empty);
         thread_mutex_unlock(&pool->lock);
 
         // printf("[worker %d] start task\n", worker_idx);
-        const double t1 = get_seconds();
+        // const double t1 = get_seconds();
         if (task->function != NULL) {
             task->function(task->argument);
         } else {
             fprintf(stderr, "[worker %d] Invalid function pointer\n", worker_idx);
         }
-        const double t2 = get_seconds();
-        printf("[worker %d] run task for %.2f seconds\n", worker_idx, t2 - t1);
+        // const double t2 = get_seconds();
+        // printf("[worker %d] run task for %.2f seconds\n", worker_idx, t2 - t1);
 
         free(task);
     }
@@ -171,13 +172,13 @@ int thread_pool_destroy(thread_pool *pool) {
     }
 
     thread_mutex_lock(&pool->lock);
-    printf("[pool] send signal shutdown\n");
+    // printf("[pool] send signal shutdown\n");
     pool->shutdown = 1;
     thread_cond_broadcast(&pool->full);
     thread_mutex_unlock(&pool->lock);
-    printf("[pool] thread_pool_destroy\n");
+    // printf("[pool] thread_pool_destroy\n");
 
-    printf("[pool] waiting for threads to finish\n");
+    // printf("[pool] waiting for threads to finish\n");
     for (int i = 0; i < pool->thread_count; i++) {
         pthread_join(pool->threads[i], NULL);
     }
@@ -210,8 +211,6 @@ int compare_task(const void *a, const void *b) {
     const thread_pool_task *task1 = *(thread_pool_task **) a;
     const thread_pool_task *task2 = *(thread_pool_task **) b;
 
-    printf("compare 2 task: %d, %d, diff %d\n", task1->file_size, task2->file_size,
-           task1->file_size - task2->file_size);
     return task1->file_size - task2->file_size;
 }
 
@@ -271,6 +270,6 @@ double get_seconds() {
     struct timeval t;
     int rc = gettimeofday(&t, NULL);
     assert(rc == 0);
-    return (double) ((double) t.tv_sec + (double) t.tv_usec / 1e6);
+    return (double) t.tv_sec + (double) t.tv_usec / 1e6;
 }
 

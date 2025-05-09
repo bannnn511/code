@@ -1,5 +1,6 @@
 #include "kv.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -11,12 +12,18 @@ void init_kvs(KeyValueStore *kv) {
     kv->kvs = NULL;
     kv->kv_count = 0;
     kv->kv_capacity = 10;
+    if (pthread_mutex_init(&kv->mu, NULL)==-1) {
+        perror("pthread_mutex_init");
+        exit(EXIT_FAILURE);
+    }
 }
 
 void kv_append(KeyValueStore *kv, const char *key, const char *value) {
     if (!kv) {
         return;
     }
+
+    pthread_mutex_lock(&kv->mu);
 
     if (kv->kvs == NULL) {
         kv->kvs = malloc(sizeof(KeyValue) * kv->kv_capacity);
@@ -49,6 +56,7 @@ void kv_append(KeyValueStore *kv, const char *key, const char *value) {
         target->values = realloc(target->values, sizeof(char *) * target->value_capacity);
     }
     target->values[target->value_count++] = strdup(value);
+    pthread_mutex_unlock(&kv->mu);
 }
 
 char *kv_pop(const KeyValueStore *kv, const char *key) {

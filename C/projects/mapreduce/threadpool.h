@@ -38,7 +38,7 @@ typedef struct thread_pool {
     thread_pool_policy policy;
 } thread_pool;
 
-int thread_pool_init(thread_pool *, int, int queue_size, thread_pool_policy);
+int thread_pool_init(thread_pool *, int thread_count, int queue_size, thread_pool_policy);
 
 int thread_pool_add(thread_pool *pool, void (*function)(void *), void *argument);
 
