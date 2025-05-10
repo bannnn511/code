@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <sys/time.h>
 #include <stdint.h>
+#include <unistd.h>
 
 struct worker_args {
     thread_pool *pool;
@@ -44,6 +45,7 @@ int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_
     pool->policy = policy;
     pool->thread_count = 0;
     pool->task_count = 0;
+    pool->active_tasks = 0;
     pool->policy = policy;
 
     if (policy == THREAD_POOL_POLICY_SFF) {
@@ -106,7 +108,7 @@ void thread_pool_wait(thread_pool *pool) {
     }
 
     thread_mutex_lock(&pool->lock);
-    while (pool->task_count > 0) {
+    while (pool->task_count > 0 || pool->active_tasks > 0) {
         thread_cond_wait(&pool->cond, &pool->lock);
     }
     thread_mutex_unlock(&pool->lock);
@@ -145,6 +147,7 @@ void *worker(void *arg) {
         // printf("worker %d pick task %d, file_size %d\n", worker_idx, task->conn_fd,
         // task->file_size);
 
+        pool->active_tasks++;
         thread_cond_signal(&pool->empty);
         thread_mutex_unlock(&pool->lock);
 
@@ -157,6 +160,11 @@ void *worker(void *arg) {
         }
         // const double t2 = get_seconds();
         // printf("[worker %d] run task for %.2f seconds\n", worker_idx, t2 - t1);
+
+        thread_mutex_lock(&pool->lock);
+        pool->active_tasks--;
+        thread_cond_broadcast(&pool->cond);
+        thread_mutex_unlock(&pool->lock);
 
         free(task);
     }

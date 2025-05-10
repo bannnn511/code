@@ -29,7 +29,8 @@ typedef struct thread_pool {
     heap_t *sff_queue; // for smallest file first queue
     pthread_t *threads;
     int queue_size;
-    int task_count;
+    int task_count;      // Number of tasks in queue
+    int active_tasks;    // Number of tasks currently being executed
     int thread_count;
     int head;
     int tail;

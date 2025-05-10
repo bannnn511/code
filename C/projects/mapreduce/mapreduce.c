@@ -1,6 +1,7 @@
 
 #include "mapreduce.h"
 #include "shard.h"
+#include <stdatomic.h>
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
@@ -42,6 +43,7 @@ void notify_partition_complete(ul partition_number);
 void wait_for_partition(ul partition_number);
 
 void init_partition_status(ul num_partitions);
+void create_intermediate_dir(char **filename_ptr, const ul partition_number);
 
 typedef struct {
     char **keys;
@@ -50,6 +52,7 @@ typedef struct {
     int capacity;
     time_t last_flush;
     pthread_mutex_t mutex;
+    FILE *fp;  // intermediate file pointer
 } KeyValueBuffer;
 
 typedef struct partition_status {
@@ -71,7 +74,6 @@ size_t write_buffer_size = 64 * 1024;  // 64KB write buffer
 KeyValueStore *store = NULL;
 partition_status *partition_statuses = NULL;
 
-// init_buffers run after files are sharded
 void init_buffers(const ul num_partitions) {
     if (buffers != NULL) {
         return;
@@ -92,8 +94,17 @@ void init_buffers(const ul num_partitions) {
             exit(EXIT_FAILURE);
         }
 
+        char *filename;
+        create_intermediate_dir(&filename, i);
+        FILE *fp = fopen(filename, "a");
+        if (fp == NULL) {
+            perror("fopen");
+            exit(EXIT_FAILURE);
+        }
+
         pthread_mutex_init(&buffers[i].mutex, NULL);
 
+        buffers[i].fp = fp;
         buffers[i].size = 0;
         buffers[i].capacity = buffer_capacity;
         buffers[i].last_flush = current_time;
@@ -127,21 +138,38 @@ void flush_buffer(const ul partition_number) {
         return;
     }
 
-    char *filename;
-    create_intermediate_dir(&filename, partition_number);
-    FILE *fp = fopen(filename, "a");
-    if (fp == NULL) {
-        perror("fopen");
-        exit(EXIT_FAILURE);
-    }
+    char file_buf[write_buffer_size];
+    size_t buffer_pos = 0;
 
     for (int i = 0; i < buffer->size; i++) {
-        fprintf(fp, "%s\t%s\n", buffer->keys[i], buffer->values[i]);
+        int written = snprintf(file_buf + buffer_pos, write_buffer_size - buffer_pos, "%s\t%s\n",
+                               buffer->keys[i], buffer->values[i]);
+
+        if (written > 0 && written < write_buffer_size - buffer_pos) {
+            buffer_pos += written;
+        } else {
+            // Buffer is full, flush it
+            fwrite(buffer, 1, buffer_pos, buffer->fp);
+            buffer_pos = 0;
+
+            // Write the current entry
+            written = snprintf(file_buf, write_buffer_size, "%s\t%s\n", buffer->keys[i],
+                               buffer->values[i]);
+            if (written > 0) {
+                buffer_pos = written;
+            }
+        }
+
         free(buffer->keys[i]);
         free(buffer->values[i]);
     }
 
-    fflush(fp);
+    // Flush any remaining data
+    if (buffer_pos > 0) {
+        fwrite(file_buf, 1, buffer_pos, buffer->fp);
+    }
+
+    fflush(buffer->fp);
     buffer->last_flush = time(NULL);
     buffer->size = 0;
 }
@@ -340,7 +368,6 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
         }
     }
     if (rmdir(intermediate_file) != 0 && errno != ENOENT) {
-        // Log error only if it's not "directory not found"
         fprintf(stderr, "Failed to remove intermediate directory %s: %s\n", intermediate_file,
                 strerror(errno));
     }
