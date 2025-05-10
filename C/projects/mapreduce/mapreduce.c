@@ -108,6 +108,7 @@ void init_buffers(const ul num_partitions) {
         buffers[i].size = 0;
         buffers[i].capacity = buffer_capacity;
         buffers[i].last_flush = current_time;
+        free(filename);
     }
 }
 
@@ -226,9 +227,9 @@ void cleanup_buffers() {
         free(buffers[i].values);
         pthread_mutex_unlock(&buffers[i].mutex);
         pthread_mutex_destroy(&buffers[i].mutex);
+        fclose(buffers[i].fp);
     }
     free(buffers);
-    buffers = NULL;
 }
 
 char *get_next(char *key, int partition_number) {
@@ -443,6 +444,7 @@ void map_worker(void *arg) {
 
     t.map(buffer);
     free(buffer);
+    free(arg);
 }
 
 void process_key_values(KeyValueStore *kv, const ul partition_number) {

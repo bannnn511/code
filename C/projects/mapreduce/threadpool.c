@@ -171,6 +171,7 @@ void *worker(void *arg) {
 
     // printf("[worker %d] === exit ===\n", worker_idx);
 
+    free(arg);
     pthread_exit(NULL);
 }
 
