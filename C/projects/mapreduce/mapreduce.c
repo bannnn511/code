@@ -260,10 +260,6 @@ ul MR_DefaultHashPartition(char *key, const int num_partitions) {
     return hash % num_partitions;
 }
 
-/**
- * 1. split the input files into M pieces
- * 2. start workers, master gives shards to workers
- */
 void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers,
             Partitioner partition) {
     if (argc < 2) {
@@ -273,7 +269,6 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
 
     partitioner = partition;
 
-    // 1. split input files into shards
     char **files = malloc(argc * sizeof(char *));
     for (int i = 0; i < argc; i++) {
         files[i] = argv[i + 1];
