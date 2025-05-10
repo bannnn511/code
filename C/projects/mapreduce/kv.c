@@ -45,8 +45,16 @@ void kv_append(KeyValueStore *kv, const char *key, const char *value) {
             kv->kvs = realloc(kv->kvs, sizeof(KeyValue) * kv->kv_capacity);
         }
         target = &kv->kvs[kv->kv_count++];
-        target->key = strdup(key);
-        target->values = malloc(sizeof(char *) * 10);
+        char *key_copy = strdup(key);
+        char **values = malloc(sizeof(char *) * 10);
+        if (!key_copy || !values) {
+            free(key_copy);
+            free(values);
+            pthread_mutex_unlock(&kv->mu);
+            return;
+        }
+        target->key = key_copy;
+        target->values = values;
         target->value_count = 0;
         target->value_capacity = 10;
     }
@@ -55,13 +63,18 @@ void kv_append(KeyValueStore *kv, const char *key, const char *value) {
         target->value_capacity *= 2;
         target->values = realloc(target->values, sizeof(char *) * target->value_capacity);
     }
-    target->values[target->value_count++] = strdup(value);
+    char *val_copy = strdup(value);
+    if (!val_copy) {
+        pthread_mutex_unlock(&kv->mu);
+        return;
+    }
+    target->values[target->value_count++] = val_copy;
 
     pthread_mutex_unlock(&kv->mu);
 }
 
 char *kv_pop(KeyValueStore *kv, const char *key) {
-    if (!kv || !key || index < 0) {
+    if (!kv || !key) {
         return NULL;
     }
 
@@ -73,9 +86,16 @@ char *kv_pop(KeyValueStore *kv, const char *key) {
                 pthread_mutex_unlock(&kv->mu);
                 return NULL;
             }
-            char *value = kv->kvs[i].values[0];
 
-            // Shift remaining values left
+            // Get the first value and make a copy for caller
+            char *value = strdup(kv->kvs[i].values[0]);
+            if (!value) {
+                pthread_mutex_unlock(&kv->mu);
+                return NULL;
+            }
+
+            // Free original and shift remaining values left
+            free(kv->kvs[i].values[0]);
             for (size_t j = 0; j < kv->kvs[i].value_count - 1; j++) {
                 kv->kvs[i].values[j] = kv->kvs[i].values[j + 1];
             }
@@ -138,7 +158,7 @@ void free_kvs(KeyValueStore *kv) {
 }
 
 void print_kv(const KeyValueStore kv) {
-    for (int i = 0; i < kv.kv_count; i++) {
+    for (size_t i = 0; i < kv.kv_count; i++) {
         const KeyValue current = kv.kvs[i];
         printf("Key: %s\n", current.key);
         for (size_t j = 0; j < current.value_count; j++) {

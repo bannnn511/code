@@ -9,13 +9,13 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <unistd.h>
-
+#include <errno.h>
 #include "kv.h"
 #include "threadpool.h"
 
 // int shard_size = 16 * 1024; // 16kb
 
-#define PATH_MAX 256
+#define MAX_BUFFER_SIZE 1024
 
 typedef unsigned long ul;
 Partitioner partitioner;
@@ -49,13 +49,27 @@ typedef struct {
     int size;
     int capacity;
     time_t last_flush;
+    pthread_mutex_t mutex;
 } KeyValueBuffer;
+
+typedef struct partition_status {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    int completed_mappers;
+    int total_mappers;
+    bool is_ready;
+    bool has_data;
+} partition_status;
+
+void free_partition_status(partition_status *status);
 
 KeyValueBuffer *buffers = NULL;
 int buffer_capacity = 1000;
-int flush_threshold = 100; // when to flush to disk
-int flush_interval_sec = 10; // flush every 10 seconds
+int flush_threshold = 100;             // when to flush to disk
+int flush_interval_sec = 10;           // flush every 10 seconds
+size_t write_buffer_size = 64 * 1024;  // 64KB write buffer
 KeyValueStore *store = NULL;
+partition_status *partition_statuses = NULL;
 
 // init_buffers run after files are sharded
 void init_buffers(const ul num_partitions) {
@@ -78,6 +92,8 @@ void init_buffers(const ul num_partitions) {
             exit(EXIT_FAILURE);
         }
 
+        pthread_mutex_init(&buffers[i].mutex, NULL);
+
         buffers[i].size = 0;
         buffers[i].capacity = buffer_capacity;
         buffers[i].last_flush = current_time;
@@ -93,7 +109,7 @@ void create_intermediate_dir(char **filename_ptr, const ul partition_number) {
         }
     }
 
-    ul len = strlen(intermediate_file) + strlen("/intermidiate_") + 10;
+    ul len = strlen(intermediate_file) + strlen("/intermediate_") + 10;
 
     char *filename = malloc(len);
     if (filename == NULL) {
@@ -130,24 +146,6 @@ void flush_buffer(const ul partition_number) {
     buffer->size = 0;
 }
 
-void check_timed_flushed() {
-    if (buffers == NULL) {
-        return;
-    }
-
-    const time_t current_time = time(NULL);
-    for (ul i = 0; i < num_partitions; i++) {
-        const KeyValueBuffer buffer = buffers[i];
-        if (buffer.size < 0) {
-            continue;
-        }
-
-        if (difftime(current_time, buffer.last_flush) > 0) {
-            flush_buffer(i);
-        }
-    }
-}
-
 // append_buffer flushes buffer if exceed time threshhold or capacity
 void append_buffer(const ul partition_number, char *key, char *value) {
     if (buffers == NULL || partition_number >= num_partitions) {
@@ -156,16 +154,53 @@ void append_buffer(const ul partition_number, char *key, char *value) {
         return;
     }
 
-    check_timed_flushed();
-
     KeyValueBuffer *buffer = &buffers[partition_number];
+    pthread_mutex_lock(&buffer->mutex);
+
+    // Check if we need to flush due to capacity
     if (buffer->size == buffer->capacity) {
         flush_buffer(partition_number);
     }
 
-    buffer->keys[buffer->size] = strdup(key);
-    buffer->values[buffer->size] = strdup(value);
-    buffer->size++;
+    // Check if we need to flush due to time
+    if (buffer->size > 0) {
+        time_t current_time = time(NULL);
+        if (difftime(current_time, buffer->last_flush) > flush_interval_sec) {
+            flush_buffer(partition_number);
+        }
+    }
+
+    char *new_key = strdup(key);
+    char *new_value = strdup(value);
+
+    if (new_key != NULL && new_value != NULL) {
+        buffer->keys[buffer->size] = new_key;
+        buffer->values[buffer->size] = new_value;
+        buffer->size++;
+    } else {
+        free(new_key);
+        free(new_value);
+    }
+
+    pthread_mutex_unlock(&buffer->mutex);
+}
+
+void cleanup_buffers() {
+    if (buffers == NULL) {
+        return;
+    }
+
+    for (ul i = 0; i < num_partitions; i++) {
+        pthread_mutex_lock(&buffers[i].mutex);
+        flush_buffer(i);
+
+        free(buffers[i].keys);
+        free(buffers[i].values);
+        pthread_mutex_unlock(&buffers[i].mutex);
+        pthread_mutex_destroy(&buffers[i].mutex);
+    }
+    free(buffers);
+    buffers = NULL;
 }
 
 char *get_next(char *key, int partition_number) {
@@ -179,9 +214,9 @@ char *get_next(char *key, int partition_number) {
     return kv_pop(kv, key);
 }
 
-// MR_Emit should not flush buffer
 void MR_Emit(char *key, char *value) {
     const ul partition_no = partitioner(key, num_partitions);
+    // printf("%s %s\n", key, value);
 
     append_buffer(partition_no, key, value);
 }
@@ -219,8 +254,12 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
         perror("malloc");
         exit(EXIT_FAILURE);
     }
+    init_vector(s);
 
+    printf("[INFO][mapredeuce.c] SHARD RUNNING\n");
     shard_file(s, files, argc - 1);
+    printf("[INFO][mapredeuce.c] SHARD DONE\n");
+
     num_partitions = num_reducers;
     init_buffers(num_partitions);
     init_partition_status(num_partitions);
@@ -247,56 +286,75 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
 
     thread_pool_init(mapper_pool, num_mappers, 10, 0);
     thread_pool_init(reducer_pool, num_reducers, 10, 0);
+
+    printf("[INFO][mapredeuce.c] MAP START\n");
     for (int i = 0; i < s->size; i++) {
-        map_worker_task *task = malloc(sizeof(map_worker_task));
-        *task = (map_worker_task){s->arr[i], map};
-        thread_pool_add(mapper_pool, (void *) map_worker, task);
+        map_worker_task *map_t = malloc(sizeof(map_worker_task));
+        *map_t = (map_worker_task){s->arr[i], map};
+        thread_pool_add(mapper_pool, map_worker, map_t);
+        // map_worker(map_t); // for single worker
     }
 
-    // wait for all mappers to finish
     thread_pool_wait(mapper_pool);
-
+    printf("[INFO][mapredeuce.c] MAP DONE\n");
 
     for (ul i = 0; i < num_partitions; i++) {
         flush_buffer(i);
         notify_partition_complete(i);
     }
 
-    // Start reducers when partitions are ready
+    printf("[INFO][mapredeuce.c] REDUCE START\n");
     for (int i = 0; i < num_reducers; i++) {
         wait_for_partition(i);
-        reduce_worker_task *task = malloc(sizeof(reduce_worker_task));
-        *task = (reduce_worker_task){reduce, get_next, i};
-        thread_pool_add(reducer_pool, (void *) reduce_worker, task);
+        reduce_worker_task *reduce_t = malloc(sizeof(reduce_worker_task));
+        *reduce_t = (reduce_worker_task){reduce, get_next, i};
+        thread_pool_add(reducer_pool, reduce_worker, reduce_t);
+        // reduce_worker(reduce_t);  // for single worker
     }
 
     thread_pool_wait(reducer_pool);
+    printf("[INFO][mapredeuce.c] REDUCE DONE\n");
 
     // free resources
     thread_pool_destroy(mapper_pool);
     thread_pool_destroy(reducer_pool);
 
+    // Ensure all partitions are done and files are flushed
+    for (ul i = 0; i < num_partitions; i++) {
+        pthread_mutex_lock(&buffers[i].mutex);
+        flush_buffer(i);
+        pthread_mutex_unlock(&buffers[i].mutex);
+    }
+
     for (ul i = 0; i < num_partitions; i++) {
         free_kvs(&store[i]);
     }
 
-    printf("done\n");
+    // Clean up intermediate files
+    for (ul i = 0; i < num_partitions; i++) {
+        char filename[MAX_BUFFER_SIZE];
+        snprintf(filename, MAX_BUFFER_SIZE, "%s/intermediate_%lu.txt", intermediate_file, i);
+        if (unlink(filename) != 0 && errno != ENOENT) {
+            fprintf(stderr, "Failed to remove intermediate file %s: %s\n", filename,
+                    strerror(errno));
+        }
+    }
+    if (rmdir(intermediate_file) != 0 && errno != ENOENT) {
+        // Log error only if it's not "directory not found"
+        fprintf(stderr, "Failed to remove intermediate directory %s: %s\n", intermediate_file,
+                strerror(errno));
+    }
 
+    cleanup_buffers();
+    free_partition_status(partition_statuses);
+    free(partition_statuses);
+    free_shard(s);
     free(files);
     free(s);
+    free(mapper_pool);
+    free(reducer_pool);
+    free(store);
 }
-
-typedef struct partition_status {
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-    int completed_mappers;
-    int total_mappers;
-    bool is_ready;
-    bool has_data;
-} partition_status;
-
-// Add to global variables
-partition_status *partition_statuses = NULL;
 
 // Initialize the status tracking system
 void init_partition_status(const ul num_partitions) {
@@ -314,6 +372,15 @@ void init_partition_status(const ul num_partitions) {
         }
         partition_statuses[i].is_ready = false;
     }
+}
+
+void free_partition_status(partition_status *status) {
+    if (status == NULL) {
+        return;
+    }
+
+    pthread_cond_destroy(&status->cond);
+    pthread_mutex_destroy(&status->mutex);
 }
 
 void wait_for_partition(const ul partition_number) {
@@ -335,7 +402,7 @@ void notify_partition_complete(const ul partition_number) {
 }
 
 void map_worker(void *arg) {
-    const map_worker_task t = *(map_worker_task *) arg;
+    const map_worker_task t = *(map_worker_task *)arg;
     const size_t buffer_size = t.s.end - t.s.start + 1;
     char *buffer = malloc(buffer_size);
     if (buffer == NULL) {
@@ -361,7 +428,6 @@ void process_key_values(KeyValueStore *kv, const ul partition_number) {
     snprintf(filename, len, "%s/intermediate_%ld.txt", intermediate_file, partition_number);
 
     FILE *fp = fopen(filename, "r");
-    // unlink(filename); // delete the file after reading
     if (!fp) {
         free(filename);
         return;
@@ -372,15 +438,29 @@ void process_key_values(KeyValueStore *kv, const ul partition_number) {
 
     while (getline(&line, &size, fp) != -1) {
         char *key = strtok(line, "\t");
-        char *value = strtok(NULL, "\t");
+        char *value = strtok(NULL, "\t\n");  // Also remove newline
         if (!key || !value) continue;
+
+        // Make the strings null-terminated at the right place
+        char *nl_key = strchr(key, '\n');
+        if (nl_key) *nl_key = '\0';
+        char *nl_value = strchr(value, '\n');
+        if (nl_value) *nl_value = '\0';
+
+        // Skip empty strings
+        if (strlen(key) == 0 || strlen(value) == 0) continue;
 
         kv_append(kv, key, value);
     }
+
+    free(line);
+    fclose(fp);
+    free(filename);
+    pthread_mutex_unlock(&kv->mu);
 }
 
 void reduce_worker(void *arg) {
-    const reduce_worker_task *t = arg;
+    reduce_worker_task *t = arg;
     KeyValueStore *kvs = &store[t->partition_number];
     if (kvs == NULL) {
         perror("malloc");
@@ -389,12 +469,10 @@ void reduce_worker(void *arg) {
 
     process_key_values(kvs, t->partition_number);
     kv_sort(kvs);
-    // printf("sort paritition :%ld\n", t->partition_number);
-    // if (kvs->kvs != NULL) {
-    //     printf("partition key %s\n", kvs->kvs[0].key);
-    // }
 
-    for (int i = 0; i < kvs->kv_count; i++) {
+    for (ul i = 0; i < kvs->kv_count; i++) {
         t->reduce(kvs->kvs[i].key, get_next, t->partition_number);
     }
+
+    free(t);
 }

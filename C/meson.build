@@ -36,6 +36,7 @@ project_sources = [
     'projects/mapreduce/shard.c',
     'projects/mapreduce/threadpool.c',
     'projects/mapreduce/heap.c',
+    'projects/mapreduce/kv.c',
     'projects/mapreduce/tests/wordcount.c'
 ]
 

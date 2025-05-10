@@ -14,6 +14,10 @@ typedef struct vector {
     int cap;
 } vector;
 
+void init_vector(vector *v);
+
+void free_shard(vector *v);
+
 void append(vector *v, shard x);
 
 void delete_vector(vector *v);

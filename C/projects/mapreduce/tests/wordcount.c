@@ -4,7 +4,6 @@
 #include <string.h>
 #include "../mapreduce.h"
 
-
 // void Map(char *file_name) {
 //     FILE *fp = fopen(file_name, "r");
 //     assert(fp != NULL);
@@ -26,7 +25,7 @@
 
 // new version of map to read from buffer instead of file to be more like mapreduce style
 void Map(char *buffer) {
-    char *line = strdup(buffer); // Create a copy since strsep modifies the string
+    char *line = strdup(buffer);  // Create a copy since strsep modifies the string
     if (line == NULL) {
         perror("strdup");
         exit(EXIT_FAILURE);
@@ -59,5 +58,5 @@ void Reduce(char *key, Getter get_next, int partition_number) {
  * @return
  */
 int main(int argc, char *argv[]) {
-    MR_Run(argc, argv, Map, 10, Reduce, 10, MR_DefaultHashPartition);
+    MR_Run(argc, argv, Map, 20, Reduce, 20, MR_DefaultHashPartition);
 }

@@ -23,7 +23,6 @@ int pick_task(thread_pool *pool, thread_pool_task *task);
 
 void add_task(thread_pool *pool, thread_pool_task task);
 
-
 double get_seconds(void);
 
 int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_size,
@@ -42,6 +41,9 @@ int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_
     pool->head = 0;
     pool->tail = 0;
     pool->shutdown = 0;
+    pool->policy = policy;
+    pool->thread_count = 0;
+    pool->task_count = 0;
     pool->policy = policy;
 
     if (policy == THREAD_POOL_POLICY_SFF) {
@@ -69,7 +71,7 @@ int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_
     return 0;
 }
 
-int thread_pool_add(thread_pool *pool, void (function)(void *), void *argument) {
+int thread_pool_add(thread_pool *pool, void(function)(void *), void *argument) {
     if (pool == NULL) {
         return -1;
     }
@@ -119,20 +121,17 @@ void *worker(void *arg) {
     const int worker_idx = worker_args->id;
     thread_mutex_unlock(&pool->lock);
 
-    printf("[worker %d] start polling\n", worker_idx);
+    // printf("[worker %d] start polling\n", worker_idx);
     for (;;) {
-        // printf("[worker %d] waiting for task\n", worker_idx);
         thread_mutex_lock(&pool->lock);
 
         while (pool->task_count == 0 && !pool->shutdown) {
-            // printf("[worker %d] queue is empty, waiting...\n", worker_idx);
             thread_cond_broadcast(&pool->cond);
             thread_cond_wait(&pool->full, &pool->lock);
         }
 
         if (pool->shutdown) {
             thread_mutex_unlock(&pool->lock);
-            // printf("[worker %d] shutdown\n", worker_idx);
             break;
         }
 
@@ -143,7 +142,8 @@ void *worker(void *arg) {
             break;
         }
         pick_task(pool, task);
-        // printf("worker %d pick task %d, file_size %d\n", worker_idx, task->conn_fd, task->file_size);
+        // printf("worker %d pick task %d, file_size %d\n", worker_idx, task->conn_fd,
+        // task->file_size);
 
         thread_cond_signal(&pool->empty);
         thread_mutex_unlock(&pool->lock);
@@ -176,14 +176,15 @@ int thread_pool_destroy(thread_pool *pool) {
     pool->shutdown = 1;
     thread_cond_broadcast(&pool->full);
     thread_mutex_unlock(&pool->lock);
-    // printf("[pool] thread_pool_destroy\n");
-
-    // printf("[pool] waiting for threads to finish\n");
     for (int i = 0; i < pool->thread_count; i++) {
         pthread_join(pool->threads[i], NULL);
     }
 
     free(pool->threads);
+    if (pool->policy == THREAD_POOL_POLICY_SFF) {
+        heap_destroy(pool->sff_queue);
+        free(pool->sff_queue);
+    }
     free(pool->queue);
 
     pthread_mutex_destroy(&pool->lock);
@@ -208,8 +209,8 @@ int compare_task(const void *a, const void *b) {
     if (a == NULL || b == NULL) {
         return 0;
     }
-    const thread_pool_task *task1 = *(thread_pool_task **) a;
-    const thread_pool_task *task2 = *(thread_pool_task **) b;
+    const thread_pool_task *task1 = *(thread_pool_task **)a;
+    const thread_pool_task *task2 = *(thread_pool_task **)b;
 
     return task1->file_size - task2->file_size;
 }
@@ -226,12 +227,12 @@ void add_task(thread_pool *pool, thread_pool_task task) {
                 perror("malloc");
                 return;
             }
-            const intptr_t conn_fd = (intptr_t) task.argument;
+            const intptr_t conn_fd = (intptr_t)task.argument;
             new_task->function = task.function;
             new_task->argument = task.argument;
             new_task->file_size = check_file_size(conn_fd);
             new_task->conn_fd = conn_fd;
-            printf("add task: %d, file size: %d\n", (int) conn_fd, new_task->file_size);
+            printf("add task: %d, file size: %d\n", (int)conn_fd, new_task->file_size);
             heap_insert(pool->sff_queue, new_task);
             break;
     }
@@ -256,7 +257,7 @@ int pick_task(thread_pool *pool, thread_pool_task *task) {
                 return -1;
             }
             *task = *min_task;
-            free(min_task); // Free the allocated task
+            free(min_task);  // Free the allocated task
             printf("pick task %d, file_size %d\n", task->conn_fd, task->file_size);
             break;
     }
@@ -270,6 +271,5 @@ double get_seconds() {
     struct timeval t;
     int rc = gettimeofday(&t, NULL);
     assert(rc == 0);
-    return (double) t.tv_sec + (double) t.tv_usec / 1e6;
+    return (double)t.tv_sec + (double)t.tv_usec / 1e6;
 }
-

@@ -1,10 +1,20 @@
 #include "shard.h"
 #include <stdlib.h>
 #include <sys/stat.h>
-#include  <unistd.h>
+#include <unistd.h>
 #include <stdio.h>
 
 int shard_size = 16;
+
+void init_vector(vector *v) {
+    if (v == NULL) {
+        return;
+    }
+
+    v->arr = NULL;
+    v->size = 0;
+    v->cap = 0;
+}
 
 void append(vector *v, const shard x) {
     if (v == NULL) {
@@ -22,6 +32,13 @@ void append(vector *v, const shard x) {
     v->arr[v->size++] = x;
 }
 
+void free_shard(vector *v) {
+    if (v == NULL) {
+        return;
+    }
+
+    free(v->arr);
+}
 
 void delete_vector(vector *v) {
     if (v == NULL) {
@@ -56,7 +73,6 @@ void print_shard_buffer(const shard s) {
     fclose(f);
 }
 
-
 void shard_file(vector *shards, char **file_names, int num_files) {
     for (int i = 0; i < num_files; i++) {
         off_t file_size = get_file_size(file_names[i]);
@@ -70,14 +86,11 @@ void shard_file(vector *shards, char **file_names, int num_files) {
         }
 
         size_t total_size = 0;
-        while (total_size < (size_t) file_size) {
+        while (total_size < (size_t)file_size) {
             shard s = {
-                .file_name = file_names[i],
-                .start = total_size,
-                .end = total_size + shard_size
-            };
+                .file_name = file_names[i], .start = total_size, .end = total_size + shard_size};
 
-            if ((size_t) s.end >= (size_t) file_size) {
+            if ((size_t)s.end >= (size_t)file_size) {
                 s.end = file_size;
                 total_size = file_size;
             } else {
