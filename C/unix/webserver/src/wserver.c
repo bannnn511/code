@@ -9,7 +9,6 @@ char default_root[] = ".";
 
 void *connection_handler(void *arg);
 
-
 //
 // ./wserver [-d <basedir>] [-p <portnum>]
 //
@@ -21,8 +20,7 @@ int main(const int argc, char *argv[]) {
     int buffersize = 1;
     int policy = THREAD_POOL_POLICY_FIFO;
 
-    while ((c = getopt(argc, argv, "d:p:t:b:s:")) != -1)
-        switch (c) {
+    while ((c = getopt(argc, argv, "d:p:t:b:s:")) != -1) switch (c) {
             case 'd':
                 root_dir = optarg;
                 break;
@@ -59,7 +57,8 @@ int main(const int argc, char *argv[]) {
                 break;
             default:
                 fprintf(stderr,
-                        "usage: wserver [-d basedir] [-p port] [-t threads] [-b buffersize] [-s schedalg]\n");
+                        "usage: wserver [-d basedir] [-p port] [-t threads] [-b buffersize] [-s "
+                        "schedalg]\n");
                 exit(1);
         }
 
@@ -76,15 +75,18 @@ int main(const int argc, char *argv[]) {
     while (1) {
         struct sockaddr_in client_addr;
         int client_len = sizeof(client_addr);
-        long conn_fd =
-                accept(listen_fd, (sockaddr_t *) &client_addr, (socklen_t *) &client_len);
+        long conn_fd = accept(listen_fd, (sockaddr_t *)&client_addr, (socklen_t *)&client_len);
         if (conn_fd < 0) {
             perror("accept");
             continue;
         }
 
+        // handle client request
+        // open
+        // 5s
+
         printf("=== accept connection %ld\n", conn_fd);
-        if (thread_pool_add(pool, (void *) connection_handler, (void *) conn_fd) == -1) {
+        if (thread_pool_add(pool, (void *)connection_handler, (void *)conn_fd) == -1) {
             fprintf(stderr, "fail to add task to worker\n");
             close_or_die(conn_fd);
             break;
@@ -98,7 +100,7 @@ int main(const int argc, char *argv[]) {
 }
 
 void *connection_handler(void *arg) {
-    long conn_fd = (long) arg;
+    long conn_fd = (long)arg;
     request_handle(conn_fd);
     printf("=== close connection %ld\n", conn_fd);
     close_or_die(conn_fd);

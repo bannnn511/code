@@ -57,13 +57,6 @@ int connect_to_server(const char *hostname, const char *port) {
 
         inet_ntop(p->ai_family, get_in_addr(p->ai_addr), ip, sizeof(ip));
 
-        /*
-        * socket() creates an endpoint for communication and returns a file descriptor
-        * that refers to that endpoint. The socket has the following parameters:
-        * - domain (family): Specifies the protocol family (AF_INET for IPv4, AF_INET6 for IPv6)
-        * - type: Specifies the communication semantics (SOCK_STREAM for TCP)
-        * - protocol: Usually 0 to choose the default protocol for the given domain and type
-        */
         if (connect(socket_fd, p->ai_addr, p->ai_addrlen) == -1) {
             close(socket_fd);
             perror("client: connect");

@@ -4,10 +4,11 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 // Simple task function that sleeps for a specified time
 void sleep_task(void *arg) {
-    int seconds = *((int *) arg);
+    int seconds = *((int *)arg);
     // printf("Task sleeping for %d seconds\n", seconds);
     sleep(seconds);
     // printf("Task woke up after %d seconds\n", seconds);
@@ -15,15 +16,15 @@ void sleep_task(void *arg) {
 
 // Task that increments a counter with mutex protection
 void increment_task(void *arg) {
-    int *counter = (int *) arg;
-    pthread_mutex_t *mutex = (pthread_mutex_t *) (counter + 1);
+    int *counter = (int *)arg;
+    pthread_mutex_t *mutex = (pthread_mutex_t *)(counter + 1);
 
     pthread_mutex_lock(mutex);
     (*counter)++;
     pthread_mutex_unlock(mutex);
 
     // Add some variable workload
-    usleep(rand() % 100000); // 0-100ms
+    usleep(rand() % 100000);  // 0-100ms
 }
 
 // Test basic functionality with multiple tasks
@@ -34,9 +35,9 @@ void test_basic_functionality() {
 
     int sleep1 = 1, sleep2 = 2, sleep3 = 1;
 
-    thread_pool_add(pool, (void *) sleep_task, &sleep1);
-    thread_pool_add(pool, (void *) sleep_task, &sleep2);
-    thread_pool_add(pool, (void *) sleep_task, &sleep3);
+    thread_pool_add(pool, (void *)sleep_task, &sleep1);
+    thread_pool_add(pool, (void *)sleep_task, &sleep2);
+    thread_pool_add(pool, (void *)sleep_task, &sleep3);
 
     thread_pool_wait(pool);
     sleep(2);
@@ -60,7 +61,7 @@ void test_full_queue() {
 
     // This should block until a task completes
     printf("Adding task after queue is full (should block)...\n");
-    thread_pool_add(pool, (void *) sleep_task, &sleep_times[3]);
+    thread_pool_add(pool, (void *)sleep_task, &sleep_times[3]);
     printf("Task added successfully after space became available\n");
 
     thread_pool_wait(pool);
@@ -81,8 +82,8 @@ void test_high_concurrency() {
 
     // Setup a shared counter with mutex
     int *shared_data = malloc(sizeof(int) + sizeof(pthread_mutex_t));
-    *shared_data = 0; // Counter starts at 0
-    pthread_mutex_t *mutex = (pthread_mutex_t *) (shared_data + 1);
+    *shared_data = 0;  // Counter starts at 0
+    pthread_mutex_t *mutex = (pthread_mutex_t *)(shared_data + 1);
     pthread_mutex_init(mutex, NULL);
 
     // Add many tasks that increment the counter
@@ -114,12 +115,12 @@ void test_shutdown() {
 
     // Add some long-running tasks
     for (int i = 0; i < 3; i++) {
-        thread_pool_add(pool, (void *) sleep_task, &sleep_long);
+        thread_pool_add(pool, (void *)sleep_task, &sleep_long);
     }
 
     // Add some quick tasks
     for (int i = 0; i < 5; i++) {
-        thread_pool_add(pool, (void *) sleep_task, &sleep_short);
+        thread_pool_add(pool, (void *)sleep_task, &sleep_short);
     }
 
     // Don't wait, just destroy (should still complete all tasks)
@@ -128,7 +129,6 @@ void test_shutdown() {
     free(pool);
     printf("Shutdown test passed\n");
 }
-
 
 int main() {
     // Seed random number generator

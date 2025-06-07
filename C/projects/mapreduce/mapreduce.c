@@ -245,7 +245,6 @@ char *get_next(char *key, int partition_number) {
 
 void MR_Emit(char *key, char *value) {
     const ul partition_no = partitioner(key, num_partitions);
-    // printf("%s %s\n", key, value);
 
     append_buffer(partition_no, key, value);
 }
@@ -269,10 +268,13 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
 
     partitioner = partition;
 
+    // 1. START: SHARD FILES
     char **files = malloc(argc * sizeof(char *));
     for (int i = 0; i < argc; i++) {
         files[i] = argv[i + 1];
     }
+
+    // array of shards
     vector *s = malloc(sizeof(vector));
     if (s == NULL) {
         perror("malloc");
@@ -283,7 +285,9 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
     printf("[INFO][mapredeuce.c] SHARD RUNNING\n");
     shard_file(s, files, argc - 1);
     printf("[INFO][mapredeuce.c] SHARD DONE\n");
+    // 1. END: SHARD FILES
 
+    // 2. START: threadpools for map and reduce tasks
     num_partitions = num_reducers;
     init_buffers(num_partitions);
     init_partition_status(num_partitions);
@@ -310,17 +314,19 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
 
     thread_pool_init(mapper_pool, num_mappers, 10, 0);
     thread_pool_init(reducer_pool, num_reducers, 10, 0);
+    // 2. END: threadpools for map and reduce tasks
 
+    // 3. START: assign map task
     printf("[INFO][mapredeuce.c] MAP START\n");
     for (int i = 0; i < s->size; i++) {
         map_worker_task *map_t = malloc(sizeof(map_worker_task));
         *map_t = (map_worker_task){s->arr[i], map};
         thread_pool_add(mapper_pool, map_worker, map_t);
-        // map_worker(map_t); // for single worker
     }
 
     thread_pool_wait(mapper_pool);
     printf("[INFO][mapredeuce.c] MAP DONE\n");
+    // 3. END: assign map task
 
     for (ul i = 0; i < num_partitions; i++) {
         flush_buffer(i);
@@ -333,7 +339,6 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
         reduce_worker_task *reduce_t = malloc(sizeof(reduce_worker_task));
         *reduce_t = (reduce_worker_task){reduce, get_next, i};
         thread_pool_add(reducer_pool, reduce_worker, reduce_t);
-        // reduce_worker(reduce_t);  // for single worker
     }
 
     thread_pool_wait(reducer_pool);

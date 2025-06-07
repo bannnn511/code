@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <stdio.h>
 
-int shard_size = 16;
+int shard_size = 16 * 1024;
 
 void init_vector(vector *v) {
     if (v == NULL) {
