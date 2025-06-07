@@ -1,6 +1,8 @@
 project('C', 'c',
         version : '1.0.0',
-        default_options : ['warning_level=3', 'c_std=c11'])
+        default_options : ['warning_level=3', 'c_std=c17'])
+
+add_global_arguments('-Wall', '-Wextra', language : 'c')
 
 C = executable('C', 'main.c', install : true)
 concurrent_counter = executable('concurrent_counter', 'concurrent-counter.c', install : true)
