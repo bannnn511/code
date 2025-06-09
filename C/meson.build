@@ -1,6 +1,6 @@
 project('C', 'c',
         version : '1.0.0',
-        default_options : ['warning_level=3', 'c_std=c17'])
+        default_options : ['warning_level=3', 'c_std=c23'])
 
 add_global_arguments('-Wall', '-Wextra', language : 'c')
 

@@ -4,11 +4,18 @@
 #include <sys/socket.h>
 
 void *handle_message(int socket_fd, struct sockaddr *addr, char *req) {
-    char reply[] = "handling request";
+    char reply[BUFSIZ];
+    snprintf(reply, sizeof(reply), "Hello %s", req);  // Write to reply buffer
     int size = strlen(reply);
-    printf("Handling message: %s\n", req);
 
-    UDP_Write(socket_fd, addr, reply, size);
+    int status = UDP_Write(socket_fd, addr, reply, size);
+    if (status > 0) {                                // UDP_Write returns bytes sent (>0 on success)
+        printf("server sent message: %s\n", reply);  // Print the reply, not req
+    } else {
+        printf("message send failed\n");
+        perror("UDP_Write");
+    }
+
     return NULL;
 }
 

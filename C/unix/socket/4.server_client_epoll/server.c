@@ -36,7 +36,7 @@ void setnonblocking(int fd) {
         perror("fcntl");
     }
 
-    val |= O_ASYNC;
+    val |= O_NONBLOCK;
 
     if (fcntl(fd, F_SETFL, val) < 0) {
         perror("fcntl");

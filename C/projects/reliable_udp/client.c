@@ -1,6 +1,7 @@
 #include "io.c"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define BUFFSIZE 500
 
@@ -22,12 +23,14 @@ int main(int argc, char **argv) {
 
     char *message = argv[3];
     char res[BUFFSIZE];
+    memset(res, 0, sizeof(res));
 
     int status = make_request(host, argv[2], message, res);
     if (status == -1) {
         perror("make request");
         exit(EXIT_FAILURE);
     }
+    printf("Response: %s", res);
 
     return 0;
 }

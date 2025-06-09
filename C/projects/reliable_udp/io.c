@@ -1,8 +1,39 @@
+#include <fcntl.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/epoll.h>
+
+#define MAX_EVENTS 1000
+
+void setnonblocking(int fd) {
+    int val;
+    if ((val = fcntl(fd, F_GETFL), 0) < 0) {
+        perror("fcntl");
+    }
+
+    val |= O_NONBLOCK;
+
+    if (fcntl(fd, F_SETFL, val) < 0) {
+        perror("fcntl");
+    }
+}
+
+void setblocking(int fd) {
+    int val;
+    if ((val = fcntl(fd, F_GETFL, 0)) < 0) {
+        perror("fcntl");
+        return;
+    }
+
+    val &= ~O_NONBLOCK;  // Clear the O_NONBLOCK flag
+
+    if (fcntl(fd, F_SETFL, val) < 0) {
+        perror("fcntl");
+    }
+}
 
 int udp_create_server(const char *port) {
     struct addrinfo hints, *res, *p;
@@ -91,8 +122,13 @@ int UDP_Write(int socket_fd, const struct sockaddr *addr, const char *buffer, in
 }
 
 int UDP_Read(int socket_fd, struct sockaddr *addr, char *buffer, int n) {
-    int len = sizeof(struct sockaddr_in);
-    return recvfrom(socket_fd, buffer, n, 0, addr, (socklen_t *)&len);
+    socklen_t len = sizeof(struct sockaddr_in);
+    int bytes_received =
+        recvfrom(socket_fd, buffer, n - 1, 0, addr, &len);  // Leave space for null terminator
+    if (bytes_received > 0) {
+        buffer[bytes_received] = '\0';  // Null-terminate
+    }
+    return bytes_received;
 }
 
 int make_request(const char *host, const char *port, const char *req, char *recv) {
@@ -121,17 +157,27 @@ int make_request(const char *host, const char *port, const char *req, char *recv
     if (p == NULL || socket_fd == -1) {
         fprintf(stderr, "client: failed to connect\n");
         freeaddrinfo(res);
+        close(socket_fd);
         return -1;
     }
 
-    freeaddrinfo(res);
-
     int rc = UDP_Write(socket_fd, p->ai_addr, req, strlen(req));
     if (rc > 0) {
-        UDP_Read(socket_fd, p->ai_addr, recv, BUFSIZ);
+        struct sockaddr_in recv_addr;
+        int bytes_received = UDP_Read(socket_fd, (struct sockaddr *)&recv_addr, recv, BUFSIZ - 1);
+        if (bytes_received > 0) {
+            recv[bytes_received] = '\0';  // Null-terminate the string
+        } else if (bytes_received == 0) {
+            printf("client: no data received\n");
+        } else {
+            perror("client: UDP_Read");
+        }
     } else {
-        perror("client: UDP_Write\n");
+        perror("client: UDP_Write");
     }
+
+    freeaddrinfo(res);
+    close(socket_fd);
 
     return 0;
 }
@@ -146,8 +192,6 @@ int udp_request_handler(int socket_fd, handler func) {
         int rc = UDP_Read(socket_fd, (struct sockaddr *)&addr, message, 500);
         printf("server received: %s\n", message);
         if (rc > 0) {
-            char reply[BUFSIZ];
-            UDP_Write(socket_fd, (struct sockaddr *)&addr, reply, strlen(reply) + 1);
             func(socket_fd, (struct sockaddr *)&addr, message);
         }
     }
