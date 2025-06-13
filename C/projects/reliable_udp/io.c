@@ -131,6 +131,49 @@ int UDP_Read(int socket_fd, struct sockaddr *addr, char *buffer, int n) {
     return bytes_received;
 }
 
+int send_message(int socket_fd, struct sockaddr *addr, const char *req, char *resp) {
+    struct epoll_event ev;
+    struct epoll_event evlist[MAX_EVENTS];
+
+    int epfd = epoll_create1(0);
+    if (epfd == -1) {
+        perror("epoll_create");
+        return -1;
+    }
+    ev.events = EPOLLIN | EPOLLONESHOT;
+    ev.data.fd = socket_fd;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, socket_fd, &ev) == -1) {
+        perror("epoll_ctl");
+        return -1;
+    }
+
+    int rc = UDP_Write(socket_fd, addr, req, strlen(req));
+    if (rc > 0) {
+        struct sockaddr_in recv_addr;
+        setnonblocking(socket_fd);
+        int status = epoll_wait(epfd, evlist, MAX_EVENTS, 1000);
+        if (status == 0) {
+            setblocking(socket_fd);
+            printf("request timeout\n");
+            return -1;
+        }
+        int bytes_received = UDP_Read(socket_fd, (struct sockaddr *)&recv_addr, resp, BUFSIZ - 1);
+
+        if (bytes_received > 0) {
+            resp[bytes_received] = '\0';  // Null-terminate the string
+        } else if (bytes_received == 0) {
+            printf("client: no data received\n");
+        } else {
+            perror("client: UDP_Read");
+        }
+    } else {
+        perror("client: UDP_Write");
+    }
+
+
+    return 0;
+}
+
 int make_request(const char *host, const char *port, const char *req, char *recv) {
     struct addrinfo hints, *res, *p;
     int socket_fd = -1;
@@ -161,19 +204,9 @@ int make_request(const char *host, const char *port, const char *req, char *recv
         return -1;
     }
 
-    int rc = UDP_Write(socket_fd, p->ai_addr, req, strlen(req));
-    if (rc > 0) {
-        struct sockaddr_in recv_addr;
-        int bytes_received = UDP_Read(socket_fd, (struct sockaddr *)&recv_addr, recv, BUFSIZ - 1);
-        if (bytes_received > 0) {
-            recv[bytes_received] = '\0';  // Null-terminate the string
-        } else if (bytes_received == 0) {
-            printf("client: no data received\n");
-        } else {
-            perror("client: UDP_Read");
-        }
-    } else {
-        perror("client: UDP_Write");
+    int send_status = send_message(socket_fd, p->ai_addr, req, recv);
+    if (send_status == -1) {
+        printf("send_message failed\n");
     }
 
     freeaddrinfo(res);

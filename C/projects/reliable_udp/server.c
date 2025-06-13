@@ -6,14 +6,11 @@
 void *handle_message(int socket_fd, struct sockaddr *addr, char *req) {
     char reply[BUFSIZ];
     snprintf(reply, sizeof(reply), "Hello %s", req);  // Write to reply buffer
-    int size = strlen(reply);
 
-    int status = UDP_Write(socket_fd, addr, reply, size);
-    if (status > 0) {                                // UDP_Write returns bytes sent (>0 on success)
-        printf("server sent message: %s\n", reply);  // Print the reply, not req
-    } else {
-        printf("message send failed\n");
-        perror("UDP_Write");
+    char resp[BUFSIZ];
+    int status = send_message(socket_fd, addr, reply, resp);
+    if (status == -1) {
+        fprintf(stderr, "send_message timeout\n");
     }
 
     return NULL;
