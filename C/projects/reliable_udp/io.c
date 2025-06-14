@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/epoll.h>
@@ -11,8 +12,6 @@
 #define MAX_EVENTS 1000
 
 #define DEBUG 1
-
-int send_ack(int socket_fd, struct sockaddr *addr);
 
 void print_debug(const char *format, ...) {
     if (!DEBUG) {
@@ -240,13 +239,6 @@ int wait_and_ack(int socket_fd, struct sockaddr *addr, char *resp) {
         goto cleanup;
     }
 
-    resp[bytes_received] = '\0';
-    int ack = send_ack(socket_fd, addr);
-    if (ack < 0) {
-        print_debug("response: send ACK failed\n");
-        status = -1;
-    }
-
 cleanup:
     setblocking(socket_fd);
     close(epfd);
@@ -254,40 +246,50 @@ cleanup:
     return status;
 }
 
+int send_oneway(int socket_fd, struct sockaddr *addr, char *req) {
+    return UDP_Write(socket_fd, addr, req, strlen(req));
+}
+
 int send_message_ack(int socket_fd, struct sockaddr *addr, const char *req) {
     // send message and wait for ACK
     // if no ACK or timeout -> retry
     int retry = 0;
-    while (1) {
+    int delay = 0;
+    const int MAX_RETRIES = 5;  // Maximum number of retries
+
+    while (retry <= MAX_RETRIES) {
         if (retry > 0) {
             print_debug("send_message: retry sending message %d\n", retry);
+            sleep(delay);
         }
+
         char ack_reply[BUFSIZ];
         int status = send_request_timeout(socket_fd, addr, req, ack_reply);
+
         if (status < 0) {
-            if (status == -2) {
+            if (status == -2) {  // Timeout
+                print_debug("send_message: timeout on attempt %d\n", retry + 1);
+                retry++;
                 continue;
+            } else {
+                print_debug("send_message: error on attempt %d\n", retry + 1);
+                return -1;
             }
         }
 
-        if (strncmp("ACK", ack_reply, 3) == -1) {
-            // print_debug("send_message ERROR: expected ACK\n");
-            return -1;
+        // Check if we received an ACK
+        if (strncmp("ACK", ack_reply, 3) != 0) {
+            print_debug("send_message ERROR: expected ACK, got: %s\n", ack_reply);
+            retry++;
+            continue;
         } else {
             print_debug("send_message: received ACK\n");
-            break;
+            return 0;
         }
-        retry++;
-
-        sleep(1);
     }
 
-    return 0;
-}
-
-int send_ack(int socket_fd, struct sockaddr *addr) {
-    char ACK_message[] = "ACK";
-    return send_message_ack(socket_fd, addr, ACK_message);
+    print_debug("send_message: max retries (%d) exceeded\n", MAX_RETRIES);
+    return -1;
 }
 
 int make_request(const char *host, const char *port, const char *req, char *recv) {
@@ -331,6 +333,13 @@ int make_request(const char *host, const char *port, const char *req, char *recv
         return -1;
     }
 
+    char ACK_message[BUFSIZ] = "ACK";
+    int ack_status = send_message_ack(socket_fd, p->ai_addr, ACK_message);
+    if (ack_status < 0) {
+        fprintf(stderr, "send_message: send ACK failed\n");
+        return -1;
+    }
+
     freeaddrinfo(res);
     close(socket_fd);
 
@@ -345,9 +354,12 @@ int udp_request_handler(int socket_fd, handler func) {
         char message[BUFSIZ];
 
         int rc = UDP_Read(socket_fd, (struct sockaddr *)&addr, message, 500);
-        print_debug("server: received: %s\n", message);
-        if (send_ack(socket_fd, (struct sockaddr *)&addr) < 0) {
-            print_debug("server: send ACK failed: %s\n", message);
+        print_debug("server: received: %s\nserver: send ack\n", message);
+
+        char ACK_message[BUFSIZ] = "ACK";
+        int ack_status = send_message_ack(socket_fd, (struct sockaddr *)&addr, ACK_message);
+        if (ack_status < 0) {
+            fprintf(stderr, "send_message: send ACK failed\n");
             return -1;
         }
 
