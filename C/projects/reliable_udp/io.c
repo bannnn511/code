@@ -132,6 +132,7 @@ int UDP_Read(int socket_fd, struct sockaddr *addr, char *buffer, int n) {
 }
 
 int send_message(int socket_fd, struct sockaddr *addr, const char *req, char *resp) {
+    int status = 0;
     struct epoll_event ev;
     struct epoll_event evlist[MAX_EVENTS];
 
@@ -153,9 +154,9 @@ int send_message(int socket_fd, struct sockaddr *addr, const char *req, char *re
         setnonblocking(socket_fd);
         int status = epoll_wait(epfd, evlist, MAX_EVENTS, 1000);
         if (status == 0) {
-            setblocking(socket_fd);
             printf("request timeout\n");
-            return -1;
+            status = -1;
+            goto cleanup;
         }
         int bytes_received = UDP_Read(socket_fd, (struct sockaddr *)&recv_addr, resp, BUFSIZ - 1);
 
@@ -166,10 +167,21 @@ int send_message(int socket_fd, struct sockaddr *addr, const char *req, char *re
         } else {
             perror("client: UDP_Read");
         }
+
+        char ack_message[] = "ACK";
+        char ack_len = strlen(ack_message);
+        int rc2 = UDP_Write(socket_fd, addr, ack_message, ack_len);
+        if (rc2 == -1) {
+            perror("UDP_Write: ACK failed");
+            status = -2;
+            goto cleanup;
+        }
     } else {
         perror("client: UDP_Write");
     }
 
+cleanup:
+    setblocking(socket_fd);
 
     return 0;
 }
