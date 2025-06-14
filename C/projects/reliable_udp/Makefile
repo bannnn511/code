@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c23 -g -D_GNU_SOURCE
+CFLAGS = -Wall -Wextra -std=c2x -g -D_GNU_SOURCE
 TARGETS = server client
 
 all: $(TARGETS)

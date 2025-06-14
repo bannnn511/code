@@ -26,11 +26,12 @@ int main(int argc, char **argv) {
     memset(res, 0, sizeof(res));
 
     int status = make_request(host, argv[2], message, res);
-    if (status == -1) {
+    if (status < 0) {
         perror("make request");
         exit(EXIT_FAILURE);
+    } else {
+        printf("Response: %s", res);
     }
-    printf("Response: %s", res);
 
     return 0;
 }

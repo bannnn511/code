@@ -7,10 +7,11 @@ void *handle_message(int socket_fd, struct sockaddr *addr, char *req) {
     char reply[BUFSIZ];
     snprintf(reply, sizeof(reply), "Hello %s", req);  // Write to reply buffer
 
-    char resp[BUFSIZ];
-    int status = send_message(socket_fd, addr, reply, resp);
-    if (status == -1) {
-        fprintf(stderr, "send_message timeout\n");
+    int status = send_message_ack(socket_fd, addr, reply);
+    if (status < 0) {
+        fprintf(stderr, "server: reply message failed\n");
+    } else {
+        printf("server: reply message sent: %s\n", reply);
     }
 
     return NULL;
