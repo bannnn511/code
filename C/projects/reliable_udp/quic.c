@@ -42,6 +42,7 @@ int UDP_Read(int socket_fd, struct sockaddr *addr, packet_t *recvPacket, int n) 
 }
 
 int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) {
+    assert(ack == 2);
     packet_t packet = create_packet(ack, message);
     packet_t expected_ack_packet;
     packet_t recv_packet;
@@ -50,7 +51,7 @@ int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) 
 
     int max_retries = 5;
     while (max_retries-- > 0) {
-        // ACK = 1
+        assert(packet.ack == 2);
         UDP_Write(socket_fd, addr, &packet, sizeof(packet));
 
         int numbytes = UDP_Read(socket_fd, (struct sockaddr *)&their_addr, &expected_ack_packet,
@@ -65,6 +66,7 @@ int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) 
             print_debug("Received ACK: %d\n", expected_ack_packet.ack);
         } else {
             print_debug("No ACK received, retrying...\n");
+            continue;
         }
 
         numbytes =
@@ -81,6 +83,7 @@ int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) 
             print_debug("Received unexpected ACK: %d, expected: %d\n", recv_packet.ack,
                         packet.ack + 1);
             print_debug("No valid response received, retrying...\n");
+            continue;
         }
     }
 
@@ -132,6 +135,7 @@ int make_request(const char *host, const char *port, const char *message, char *
         // ACK = 0
         UDP_Write(socket_fd, p->ai_addr, &packet, sizeof(packet));
 
+        // ACK = 2
         int numbytes = UDP_Read(socket_fd, (struct sockaddr *)&their_addr, &expeected_ack_packet,
                                 sizeof(expeected_ack_packet));
         if (numbytes == -1) {
@@ -145,6 +149,7 @@ int make_request(const char *host, const char *port, const char *message, char *
             print_debug("Received ACK: %d\n", expeected_ack_packet.ack);
         } else {
             print_debug("No ACK received, retrying...\n");
+            continue;
         }
 
         numbytes =
@@ -155,7 +160,8 @@ int make_request(const char *host, const char *port, const char *message, char *
             return -1;
         }
 
-        if (recv_packet.ack == expeected_ack_packet.ack + 1) {
+        // ACK = 3
+        if (recv_packet.ack == ++expeected_ack_packet.ack) {
             // ACK response
             packet_t ack = create_ack_packet(recv_packet.ack++);
             if (UDP_Write(socket_fd, (struct sockaddr *)&their_addr, &ack, sizeof(ack))) {
@@ -169,6 +175,7 @@ int make_request(const char *host, const char *port, const char *message, char *
             print_debug("Received unexpected ACK: %d, expected: %d\n", recv_packet.ack,
                         packet.ack + 1);
             print_debug("No valid response received, retrying...\n");
+            continue;
         }
     }
 
@@ -202,13 +209,19 @@ int udp_request_handler(int socket_fd, handler func) {
     while (1) {
         struct sockaddr_in addr;
         packet_t recv_packet;
+
         int rc = UDP_Read(socket_fd, (struct sockaddr *)&addr, &recv_packet, 500);
         if (rc < 0) {
             fprintf(stderr, "udp_request_handler: recvfrom failed\n");
             return -1;
         }
 
-        packet_t ack = create_ack_packet(recv_packet.ack++);
+        // ACK = 0
+        assert(recv_packet.ack == 0);
+
+        // ACK = 1
+        packet_t ack = create_ack_packet(++recv_packet.ack);
+        assert(ack.ack == 1);
         int ack_status = UDP_Write(socket_fd, (struct sockaddr *)&addr, &ack, sizeof(ack));
         if (ack_status < 0) {
             fprintf(stderr, "send_message: send ACK failed\n");
