@@ -13,6 +13,23 @@
 
 #define DEBUG 1
 
+typedef struct packet {
+    int ack;
+    char buffer[BUFSIZ];
+} packet_t;
+
+// Helper function to create a packet
+packet_t create_packet(int ack, const char *message) {
+    packet_t packet;
+    packet.ack = ack;
+    strncpy(packet.buffer, message, BUFSIZ - 1);
+    packet.buffer[BUFSIZ - 1] = '\0';  // Ensure null termination
+    return packet;
+}
+
+// Helper function to create an ACK packet
+packet_t create_ack_packet() { return create_packet(1, "ACK"); }
+
 void print_debug(const char *format, ...) {
     if (!DEBUG) {
         return;
@@ -20,11 +37,11 @@ void print_debug(const char *format, ...) {
     va_list args;
     va_start(args, format);
     // Get current time
-    time_t now;
-    time(&now);
-    char *time_str = ctime(&now);
-    time_str[strlen(time_str) - 1] = '\0';  // Remove newline
-
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    long milliseconds = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+    char time_str[32];
+    snprintf(time_str, sizeof(time_str), "%04ld", milliseconds % 10000);
     printf("[%s] ", time_str);
     vprintf(format, args);
     va_end(args);
@@ -104,7 +121,7 @@ int udp_create_server(const char *port) {
     return socket_fd;
 }
 
-int udp_connet_to_host(const char *hostname, const char *port) {
+int udp_connect_to_host(const char *hostname, const char *port) {
     struct addrinfo hints, *res, *p;
     int socket_fd = 0;
 
@@ -138,23 +155,24 @@ int udp_connet_to_host(const char *hostname, const char *port) {
     return socket_fd;
 }
 
-int UDP_Write(int socket_fd, const struct sockaddr *addr, const char *buffer, int n) {
+int UDP_Write(int socket_fd, const struct sockaddr *addr, const packet_t *buffer, int n) {
     int addr_len = sizeof(struct sockaddr_in);
     return sendto(socket_fd, buffer, n, 0, addr, (socklen_t)addr_len);
 }
 
-int UDP_Read(int socket_fd, struct sockaddr *addr, char *buffer, int n) {
+int UDP_Read(int socket_fd, struct sockaddr *addr, packet_t *recvPacket, int n) {
     socklen_t len = sizeof(struct sockaddr_in);
-    int bytes_received =
-        recvfrom(socket_fd, buffer, n - 1, 0, addr, &len);  // Leave space for null terminator
+    int bytes_received = recvfrom(socket_fd, recvPacket->buffer, n - 1, 0, addr,
+                                  &len);  // Leave space for null terminator
     if (bytes_received > 0) {
-        buffer[bytes_received] = '\0';  // Null-terminate
+        recvPacket->buffer[bytes_received] = '\0';  // Null-terminate
     }
     return bytes_received;
 }
 
-int send_request_timeout(int socket_fd, struct sockaddr *addr, const char *req, char *resp) {
-    print_debug("mrt sending: %s\n", req);
+int send_request_timeout(int socket_fd, struct sockaddr *addr, const packet_t *req,
+                         packet_t *resp) {
+    print_debug("mrt sending: %s\n", req->buffer);
     int status = 0;
     struct epoll_event ev;
     struct epoll_event evlist[MAX_EVENTS];
@@ -171,7 +189,7 @@ int send_request_timeout(int socket_fd, struct sockaddr *addr, const char *req, 
         return -1;
     }
 
-    int rc = UDP_Write(socket_fd, addr, req, strlen(req));
+    int rc = UDP_Write(socket_fd, addr, req->buffer, strlen(req->buffer));
     if (rc > 0) {
         struct sockaddr_in recv_addr;
         setnonblocking(socket_fd);
@@ -183,7 +201,7 @@ int send_request_timeout(int socket_fd, struct sockaddr *addr, const char *req, 
 
         int bytes_received = UDP_Read(socket_fd, (struct sockaddr *)&recv_addr, resp, BUFSIZ - 1);
         if (bytes_received > 0) {
-            resp[bytes_received] = '\0';
+            resp->buffer[bytes_received] = '\0';
         } else if (bytes_received == 0) {
             print_debug("mrt: no data received\n");
             goto cleanup;
@@ -202,7 +220,7 @@ cleanup:
     return status;
 }
 
-int wait_and_ack(int socket_fd, struct sockaddr *addr, char *resp) {
+int wait_and_ack(int socket_fd, struct sockaddr *addr, packet_t *resp) {
     int status = 0;
     struct epoll_event ev;
     struct epoll_event evlist[MAX_EVENTS];
@@ -246,25 +264,22 @@ cleanup:
     return status;
 }
 
-int send_oneway(int socket_fd, struct sockaddr *addr, char *req) {
-    return UDP_Write(socket_fd, addr, req, strlen(req));
-}
-
-int send_message_ack(int socket_fd, struct sockaddr *addr, const char *req) {
+int send_message_ack(int socket_fd, struct sockaddr *addr, const packet_t *req) {
     // send message and wait for ACK
     // if no ACK or timeout -> retry
     int retry = 0;
-    int delay = 0;
+    // int delay = 0;
     const int MAX_RETRIES = 5;  // Maximum number of retries
 
     while (retry <= MAX_RETRIES) {
         if (retry > 0) {
             print_debug("send_message: retry sending message %d\n", retry);
-            sleep(delay);
+            // sleep(delay);
         }
 
-        char ack_reply[BUFSIZ];
-        int status = send_request_timeout(socket_fd, addr, req, ack_reply);
+        packet_t ack_packet;
+        strcpy(ack_packet.buffer, "ACK");
+        int status = send_request_timeout(socket_fd, addr, req, &ack_packet);
 
         if (status < 0) {
             if (status == -2) {  // Timeout
@@ -277,9 +292,8 @@ int send_message_ack(int socket_fd, struct sockaddr *addr, const char *req) {
             }
         }
 
-        // Check if we received an ACK
-        if (strncmp("ACK", ack_reply, 3) != 0) {
-            print_debug("send_message ERROR: expected ACK, got: %s\n", ack_reply);
+        if (strncmp("ACK", ack_packet.buffer, 3) != 0) {
+            print_debug("send_message ERROR: expected ACK, got: %s\n", ack_packet.buffer);
             retry++;
             continue;
         } else {
@@ -290,6 +304,13 @@ int send_message_ack(int socket_fd, struct sockaddr *addr, const char *req) {
 
     print_debug("send_message: max retries (%d) exceeded\n", MAX_RETRIES);
     return -1;
+}
+
+int send_message(int socket_fd, struct sockaddr *addr, char *req) {
+    packet_t req_packet;
+    strcpy(req_packet.buffer, req);
+
+    return send_message_ack(socket_fd, addr, &req_packet);
 }
 
 int make_request(const char *host, const char *port, const char *req, char *recv) {
@@ -322,19 +343,29 @@ int make_request(const char *host, const char *port, const char *req, char *recv
         return -1;
     }
 
-    int send_status = send_message_ack(socket_fd, p->ai_addr, req);
+    packet_t req_ack;
+    req_ack.ack = 0;
+    strcpy(req_ack.buffer, req);
+
+    print_debug("client: step1\n");
+    int send_status = send_message_ack(socket_fd, p->ai_addr, &req_ack);
     if (send_status == -1) {
         print_debug("send_message failed\n");
     }
 
-    int wait = wait_and_ack(socket_fd, p->ai_addr, recv);
+    print_debug("client: step2\n");
+    packet_t recv_packet;
+    int wait = wait_and_ack(socket_fd, p->ai_addr, &recv_packet);
     if (wait < 0) {
         fprintf(stderr, "send_message: wait for response failed\n");
         return -1;
     }
+    strcpy(recv, recv_packet.buffer);
 
-    char ACK_message[BUFSIZ] = "ACK";
-    int ack_status = send_message_ack(socket_fd, p->ai_addr, ACK_message);
+    print_debug("client: step3\n");
+    packet_t ack;
+    strcpy(ack.buffer, "ACK");
+    int ack_status = send_message_ack(socket_fd, p->ai_addr, &ack);
     if (ack_status < 0) {
         fprintf(stderr, "send_message: send ACK failed\n");
         return -1;
@@ -353,11 +384,13 @@ int udp_request_handler(int socket_fd, handler func) {
         struct sockaddr_in addr;
         char message[BUFSIZ];
 
-        int rc = UDP_Read(socket_fd, (struct sockaddr *)&addr, message, 500);
-        print_debug("server: received: %s\nserver: send ack\n", message);
+        packet_t recv_packet;
+        int rc = UDP_Read(socket_fd, (struct sockaddr *)&addr, &recv_packet, 500);
+        print_debug("server: received: %s\n", recv_packet.buffer);
 
-        char ACK_message[BUFSIZ] = "ACK";
-        int ack_status = send_message_ack(socket_fd, (struct sockaddr *)&addr, ACK_message);
+        packet_t ack;
+        strcpy(ack.buffer, "ACK");
+        int ack_status = send_message_ack(socket_fd, (struct sockaddr *)&addr, &ack);
         if (ack_status < 0) {
             fprintf(stderr, "send_message: send ACK failed\n");
             return -1;

@@ -4,10 +4,10 @@ TARGETS = server client
 
 all: $(TARGETS)
 
-server: server.c io.c
+server: server.c quic.c
 	$(CC) $(CFLAGS) -o server server.c
 
-client: client.c io.c
+client: client.c quic.c
 	$(CC) $(CFLAGS) -o client client.c
 
 clean:

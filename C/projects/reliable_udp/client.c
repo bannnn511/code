@@ -1,4 +1,4 @@
-#include "io.c"
+#include "quic.c"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     char res[BUFFSIZE];
     memset(res, 0, sizeof(res));
 
-    int status = make_request(host, argv[2], message, res);
+    int status = make_request(host, argv[2], message, res, sizeof(res));
     if (status < 0) {
         perror("make request");
         exit(EXIT_FAILURE);
