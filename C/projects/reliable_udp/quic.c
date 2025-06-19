@@ -10,6 +10,8 @@
 #include <assert.h>
 #include "util.c"
 
+#define TIMEOUT 5000  // Timeout in milliseconds for epoll_wait
+
 typedef struct packet {
     int ack;
     char buffer[BUFSIZ];
@@ -55,11 +57,30 @@ int UDP_Read(int socket_fd, struct sockaddr *addr, packet_t *recvPacket, int n) 
 }
 
 int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) {
+    int ret = 0;
     assert(ack == 2);
     packet_t packet = create_packet(ack, message);
     packet_t recv_packet;
     memset(&recv_packet, 0, sizeof(recv_packet));
     struct sockaddr_storage their_addr;
+
+    int epfd;
+    struct epoll_event ev;
+
+    epfd = epoll_create1(0);
+    if (epfd == -1) {
+        perror("epoll_create1");
+        return -1;
+    }
+
+    ev.events = EPOLLIN | EPOLLONESHOT;
+    ev.data.fd = socket_fd;
+
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, socket_fd, &ev) == -1) {
+        perror("epoll_ctl");
+        ret = -1;
+        goto cleanup;
+    }
 
     int max_retries = 5;
     int expected_ack = ack;
@@ -69,14 +90,27 @@ int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) 
         // Send the message with ACK = 2
         UDP_Write(socket_fd, addr, &packet, sizeof(packet));
 
+        setnonblocking(socket_fd);
+
         // Wait for ACK = 3
+        int status = epoll_wait(epfd, &ev, 1, TIMEOUT);
+        if (status == -1) {
+            perror("epoll_wait");
+            ret = -1;
+            goto cleanup;
+        } else if (status == 0) {
+            print_debug("No ACK received, retrying...\n");
+            packet.ack = expected_ack;  // Resend the same ACK
+            continue;
+        }
+
         expected_ack++;
         int numbytes =
             UDP_Read(socket_fd, (struct sockaddr *)&their_addr, &recv_packet, sizeof(recv_packet));
         if (numbytes == -1) {
             perror("client: recvfrom");
-            close(socket_fd);
-            return -1;
+            ret = -1;
+            goto cleanup;
         }
 
         if (recv_packet.ack != expected_ack) {
@@ -86,20 +120,26 @@ int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) 
             continue;
         }
 
-        break; // Valid ACK received
+        setblocking(socket_fd);
+        break;  // Valid ACK received
     }
 
     if (max_retries == 0) {
         fprintf(stderr, "Max retries reached, giving up\n");
-        close(socket_fd);
-        return -1;
+        ret = -1;
     }
 
-    return 0;
+cleanup:
+    setblocking(socket_fd);
+    close(epfd);
+    close(socket_fd);
+
+    return ret;
 }
 
 int make_request(const char *host, const char *port, const char *message, char *res,
                  size_t res_size) {
+    int ret = 0;
     struct addrinfo hints, *servinfo, *p;
     int rv;
     int socket_fd = -1;
@@ -123,6 +163,7 @@ int make_request(const char *host, const char *port, const char *message, char *
 
     if (p == NULL || socket_fd == -1) {
         fprintf(stderr, "client: failed to create socket\n");
+        free(servinfo);
         return -1;
     }
 
@@ -132,19 +173,48 @@ int make_request(const char *host, const char *port, const char *message, char *
     memset(&recv_packet, 0, sizeof(recv_packet));
     struct sockaddr_storage their_addr;
 
+    int epfd;
+    struct epoll_event ev;
+    epfd = epoll_create1(0);
+    if (epfd == -1) {
+        perror("epoll_create1");
+        close(socket_fd);
+        return -1;
+    }
+
+    ev.events = EPOLLIN;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, socket_fd, &ev) == -1) {
+        perror("epoll_ctl");
+        close(epfd);
+        return -1;
+    }
+
     int max_retries = 5;
     while (max_retries-- > 0) {
         // Send the message with ACK = 0
         UDP_Write(socket_fd, p->ai_addr, &packet, sizeof(packet));
 
-        // Wait for ACK = 1
+        setnonblocking(socket_fd);
+
+        int status = epoll_wait(epfd, &ev, 1, TIMEOUT);
+        if (status == -1) {
+            perror("epoll_wait");
+            ret = -1;
+            goto cleanup;
+        } else if (status == 0) {
+            print_debug("No ACK received, retrying...\n");
+            packet.ack = expected_ack;  // Resend the same ACK
+            continue;
+        }
+
+        // Wait for ACK = 1, ACK that the message was received
         expected_ack++;
         int numbytes =
             UDP_Read(socket_fd, (struct sockaddr *)&their_addr, &recv_packet, sizeof(recv_packet));
         if (numbytes == -1) {
             perror("client: recvfrom");
-            close(socket_fd);
-            return -1;
+            ret = -1;
+            goto cleanup;
         }
 
         // ACK = 1
@@ -153,12 +223,24 @@ int make_request(const char *host, const char *port, const char *message, char *
             continue;
         }
 
+        // Wait for message
+        int status2 = epoll_wait(epfd, &ev, 1, TIMEOUT);
+        if (status2 == -1) {
+            perror("epoll_wait");
+            ret = -1;
+            goto cleanup;
+        } else if (status == 0) {
+            print_debug("No ACK received, retrying...\n");
+            packet.ack = expected_ack;  // Resend the same ACK
+            continue;
+        }
+
         numbytes =
             UDP_Read(socket_fd, (struct sockaddr *)&their_addr, &recv_packet, sizeof(recv_packet));
         if (numbytes == -1) {
             perror("client: recvfrom");
-            close(socket_fd);
-            return -1;
+            ret = -1;
+            goto cleanup;
         }
 
         // ACK = 2
@@ -169,8 +251,8 @@ int make_request(const char *host, const char *port, const char *message, char *
             packet_t ack = create_ack_packet(recv_packet.ack);
             if (UDP_Write(socket_fd, (struct sockaddr *)&their_addr, &ack, sizeof(ack)) < 0) {
                 fprintf(stderr, "send_message: send ACK failed\n");
-                close(socket_fd);
-                return -1;
+                ret = -1;
+                goto cleanup;
             }
             break;
         } else {
@@ -183,14 +265,14 @@ int make_request(const char *host, const char *port, const char *message, char *
 
     if (max_retries == 0) {
         fprintf(stderr, "Max retries reached, giving up\n");
-        close(socket_fd);
-        return -1;
+        ret = -1;
+        goto cleanup;
     }
 
     if (res == NULL) {
         fprintf(stderr, "Response buffer is NULL\n");
-        close(socket_fd);
-        return -1;
+        ret = -1;
+        goto cleanup;
     }
 
     size_t copy_len = strnlen(recv_packet.buffer, BUFSIZ);
@@ -200,9 +282,12 @@ int make_request(const char *host, const char *port, const char *message, char *
     strncpy(res, recv_packet.buffer, copy_len);
     res[copy_len] = '\0';
 
-    freeaddrinfo(servinfo);
+cleanup:
     close(socket_fd);
-    return 0;
+    close(epfd);
+    freeaddrinfo(servinfo);
+
+    return ret;
 }
 
 typedef void *(*handler)(int socket_fd, struct sockaddr *addr, packet_t *req);
