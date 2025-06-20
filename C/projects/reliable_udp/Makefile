@@ -1,5 +1,6 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -std=c2x -g -D_GNU_SOURCE
+# CC = gcc
+CC=./filc-0.668.7-linux-x86_64/build/bin/clang
+CFLAGS = -Wall -Wextra -std=c2x -g -D_GNU_SOURCE -O
 TARGETS = server client
 
 all: $(TARGETS)

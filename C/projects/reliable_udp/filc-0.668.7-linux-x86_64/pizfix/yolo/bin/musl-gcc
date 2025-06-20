@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "${REALGCC:-gcc}" "$@" -specs "/home/pizlo/Programs/llvm-project-deluge-2/yolomusl/../pizfix/yolo/lib/musl-gcc.specs"

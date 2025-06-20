@@ -10,7 +10,8 @@
 #include <assert.h>
 #include "util.c"
 
-#define TIMEOUT 5000  // Timeout in milliseconds for epoll_wait
+#define TIMEOUT 5000     // Timeout in milliseconds for epoll_wait
+#define ACKTIMEOUT 5000  // Timeout for ACK in milliseconds
 
 typedef struct packet {
     int ack;
@@ -56,7 +57,7 @@ int UDP_Read(int socket_fd, struct sockaddr *addr, packet_t *recvPacket, int n) 
     return bytes_received;
 }
 
-int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) {
+int make_response(int socket_fd, struct sockaddr *addr, char *message, const int ack) {
     int ret = 0;
     assert(ack == 2);
     packet_t packet = create_packet(ack, message);
@@ -82,17 +83,22 @@ int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) 
         goto cleanup;
     }
 
-    int max_retries = 5;
+    int max_retries = 100;
     int expected_ack = ack;
     assert(expected_ack == 2);
+
+    // ACK = 0: [client] sends a message
+    // ACK = 1: [server] acknowledges the message
+    // ACK = 2: [server] sends a response
+    // ACK = 3: [client] acknowledges the response
     while (max_retries-- > 0) {
         assert(packet.ack == expected_ack);
         // Send the message with ACK = 2
         UDP_Write(socket_fd, addr, &packet, sizeof(packet));
+        printf("test");
 
         setnonblocking(socket_fd);
 
-        // Wait for ACK = 3
         int status = epoll_wait(epfd, &ev, 1, TIMEOUT);
         if (status == -1) {
             perror("epoll_wait");
@@ -100,7 +106,7 @@ int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) 
             goto cleanup;
         } else if (status == 0) {
             print_debug("No ACK received, retrying...\n");
-            packet.ack = expected_ack;  // Resend the same ACK
+            packet.ack = expected_ack = ack;  // Reset
             continue;
         }
 
@@ -113,10 +119,11 @@ int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) 
             goto cleanup;
         }
 
+        // Wait for ACK = 3
         if (recv_packet.ack != expected_ack) {
             print_debug("ACK mismatch: received %d, expected %d\n", recv_packet.ack, expected_ack);
             print_debug("No valid ACK received, retrying...\n");
-            packet.ack = expected_ack;
+            packet.ack = expected_ack = ack;
             continue;
         }
 
@@ -132,7 +139,6 @@ int make_response(int socket_fd, struct sockaddr *addr, char *message, int ack) 
 cleanup:
     setblocking(socket_fd);
     close(epfd);
-    close(socket_fd);
 
     return ret;
 }
@@ -167,7 +173,8 @@ int make_request(const char *host, const char *port, const char *message, char *
         return -1;
     }
 
-    packet_t packet = create_packet(0, message);
+    const int first_ack = 0;
+    packet_t packet = create_packet(first_ack, message);
     packet_t recv_packet;
     int expected_ack = 0;
     memset(&recv_packet, 0, sizeof(recv_packet));
@@ -189,7 +196,7 @@ int make_request(const char *host, const char *port, const char *message, char *
         return -1;
     }
 
-    int max_retries = 5;
+    int max_retries = 100;
     while (max_retries-- > 0) {
         // Send the message with ACK = 0
         UDP_Write(socket_fd, p->ai_addr, &packet, sizeof(packet));
@@ -203,7 +210,7 @@ int make_request(const char *host, const char *port, const char *message, char *
             goto cleanup;
         } else if (status == 0) {
             print_debug("No ACK received, retrying...\n");
-            packet.ack = expected_ack;  // Resend the same ACK
+            packet.ack = expected_ack = first_ack;  // Resend the same ACK
             continue;
         }
 
@@ -220,6 +227,7 @@ int make_request(const char *host, const char *port, const char *message, char *
         // ACK = 1
         if (expected_ack != recv_packet.ack) {
             print_debug("ACK mismatch: received %d, expected %d\n", recv_packet.ack, expected_ack);
+            expected_ack = first_ack;  // Reset expected ACK
             continue;
         }
 
@@ -231,7 +239,7 @@ int make_request(const char *host, const char *port, const char *message, char *
             goto cleanup;
         } else if (status == 0) {
             print_debug("No ACK received, retrying...\n");
-            packet.ack = expected_ack;  // Resend the same ACK
+            packet.ack = expected_ack = first_ack;  // Resend the same ACK
             continue;
         }
 

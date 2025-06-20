@@ -1,0 +1,32 @@
+%rename cpp_options old_cpp_options
+
+*cpp_options:
+-nostdinc -isystem /home/pizlo/Programs/llvm-project-deluge-2/yolomusl/../pizfix/yolo/include -isystem include%s %(old_cpp_options)
+
+*cc1:
+%(cc1_cpu) -nostdinc -isystem /home/pizlo/Programs/llvm-project-deluge-2/yolomusl/../pizfix/yolo/include -isystem include%s
+
+*link_libgcc:
+-L/home/pizlo/Programs/llvm-project-deluge-2/yolomusl/../pizfix/yolo/lib -L .%s
+
+*libgcc:
+libgcc.a%s %:if-exists(libgcc_eh.a%s)
+
+*startfile:
+%{!shared: /home/pizlo/Programs/llvm-project-deluge-2/yolomusl/../pizfix/yolo/lib/Scrt1.o} /home/pizlo/Programs/llvm-project-deluge-2/yolomusl/../pizfix/yolo/lib/crti.o crtbeginS.o%s
+
+*endfile:
+crtendS.o%s /home/pizlo/Programs/llvm-project-deluge-2/yolomusl/../pizfix/yolo/lib/crtn.o
+
+*link:
+-dynamic-linker /home/pizlo/Programs/llvm-project-deluge-2/yolomusl/../pizfix/yolo/lib/ld-yolo-x86_64.so -nostdlib %{shared:-shared} %{static:-static} %{rdynamic:-export-dynamic}
+
+*esp_link:
+
+
+*esp_options:
+
+
+*esp_cpp_options:
+
+
