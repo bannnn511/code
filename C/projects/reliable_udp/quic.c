@@ -311,6 +311,23 @@ int udp_request_handler(int socket_fd, handler func) {
             return -1;
         }
 
+        int epfd;
+        struct epoll_event ev;
+
+        epfd = epoll_create1(0);
+        if (epfd == -1) {
+            perror("epoll_create1");
+            return -1;
+        }
+
+        ev.events = EPOLLIN | EPOLLONESHOT;
+        ev.data.fd = socket_fd;
+
+        int max_retries = 100;
+        int expected_ack = recv_packet.ack++;
+
+        assert(expected_ack == 2);
+
         // ACK = 0
         assert(recv_packet.ack == 0);
 
@@ -330,6 +347,54 @@ int udp_request_handler(int socket_fd, handler func) {
         print_debug("== server handling message done ==\n");
     }
 }
+
+int quic_request_handler(int socket_fd, handler func) {
+    while (1) {
+        struct sockaddr_in addr;
+        packet_t recv_packet;
+
+        int rc = UDP_Read(socket_fd, (struct sockaddr *)&addr, &recv_packet, 500);
+        if (rc < 0) {
+            fprintf(stderr, "udp_request_handler: recvfrom failed\n");
+            return -1;
+        }
+
+        int epfd;
+        struct epoll_event ev;
+
+        epfd = epoll_create1(0);
+        if (epfd == -1) {
+            perror("epoll_create1");
+            return -1;
+        }
+
+        ev.events = EPOLLIN | EPOLLONESHOT;
+        ev.data.fd = socket_fd;
+
+        int max_retries = 100;
+        int expected_ack = recv_packet.ack++;
+
+        assert(expected_ack == 2);
+
+        // ACK = 0
+        assert(recv_packet.ack == 0);
+
+        // ACK = 1
+        packet_t ack = create_ack_packet(++recv_packet.ack);
+        assert(ack.ack == 1);
+        int ack_status = UDP_Write(socket_fd, (struct sockaddr *)&addr, &ack, sizeof(ack));
+        if (ack_status < 0) {
+            fprintf(stderr, "send_message: send ACK failed\n");
+            return -1;
+        }
+
+        if (rc > 0) {
+            func(socket_fd, (struct sockaddr *)&addr, &recv_packet);
+        }
+
+        print_debug("== server handling message done ==\n");
+    }
+    return 0; }
 
 int quic_create_server(const char *port) {
     struct addrinfo hints, *res, *p;

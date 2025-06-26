@@ -6,3 +6,4 @@ venv
 *.big
 *.o
 *.txt
+*.vscode
