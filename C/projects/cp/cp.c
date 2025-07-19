@@ -29,15 +29,9 @@ int read_and_copy(int fd, int destination) {
     blocks++;
   }
 
-  struct iovec *iov, *riov;
+  struct iovec *iov;
   iov = malloc(blocks * sizeof(struct iovec));
   if (iov == NULL) {
-    perror("malloc");
-    return -1;
-  }
-
-  riov = malloc(blocks * sizeof(struct iovec));
-  if (riov == NULL) {
     perror("malloc");
     return -1;
   }
@@ -58,23 +52,16 @@ int read_and_copy(int fd, int destination) {
     return -1;
   }
 
-  for (int i = 0; i < blocks; i++) {
-    riov[i].iov_base = iov->iov_base;
-    riov[i].iov_len = iov->iov_len;
-  }
-
-  if (writev(destination, riov, blocks) < 0) {
+  if (writev(destination, iov, blocks) < 0) {
     perror("writev");
     return -1;
   }
 
   for (int i = 0; i < blocks; i++) {
     free(iov[i].iov_base);
-    // free(riov[i].iov_base);
   }
 
   free(iov);
-  free(riov);
 
   return 0;
 }
