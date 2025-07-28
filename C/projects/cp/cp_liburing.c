@@ -1,10 +1,26 @@
+#include <assert.h>
 #include <fcntl.h>
 #include <liburing.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #define QUEUE_DEPTH 1
 #define BLOCK_SZ 4096
+
+struct file_info {
+  int iov_blocks;
+  struct iovec iov[];
+};
+
+void output_to_file(int out_fd, char *buf, int len) {
+  while (len--) {
+    assert(buf != NULL);
+    write(out_fd, buf++, 1);
+  }
+}
 
 size_t get_file_size(int fd) {
   struct stat st;
@@ -28,14 +44,88 @@ int submit_read_request(char *file_name, struct io_uring ring) {
   if (size % BLOCK_SZ) {
     blocks++;
   }
+  assert(blocks > 0);
 
-  return 1;
+  struct file_info *fi =
+      malloc(sizeof(struct file_info) + blocks * sizeof(struct iovec));
+  if (fi == NULL) {
+    perror("malloc");
+    return 1;
+  }
+
+  fi->iov_blocks = blocks;
+
+  size_t bytes_remaining = size;
+  int i = 0;
+  while (bytes_remaining > 0) {
+    size_t this_block = bytes_remaining < BLOCK_SZ ? bytes_remaining : BLOCK_SZ;
+    assert(this_block > 0);
+    fi->iov[i].iov_base = malloc(this_block);
+    if (fi->iov[i].iov_base == NULL) {
+      perror("malloc");
+      return 1;
+    }
+    fi->iov[i].iov_len = this_block;
+    i++;
+    bytes_remaining -= this_block;
+  }
+
+  struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
+  io_uring_prep_readv(sqe, fd, fi->iov, blocks, 0);
+  io_uring_sqe_set_data(sqe, fi);
+  io_uring_submit(&ring);
+
+  return 0;
 }
 
+int get_completion_and_print(int out_fd, struct io_uring ring) {
+  // wait
+  struct io_uring_cqe *cqe;
+  int ret = io_uring_wait_cqe(&ring, &cqe);
+  if (ret < 0) {
+    perror("io_uring_wait_cqe");
+    return -1;
+  }
+
+  if (cqe->res < 0) {
+    strerror(abs(cqe->res));
+    return -1;
+  }
+
+  // get data
+  struct file_info *fi = io_uring_cqe_get_data(cqe);
+  if (fi == NULL) {
+    fprintf(stderr, "cannot get cqe data\n");
+    return -1;
+  }
+
+  for (int i = 0; i < fi->iov_blocks; i++) {
+    output_to_file(out_fd, fi->iov[i].iov_base, fi->iov[i].iov_len);
+  }
+
+  for (int i = 0; i < fi->iov_blocks; i++) {
+    free(fi->iov[i].iov_base);
+  }
+  free(fi);
+
+  io_uring_cqe_seen(&ring, cqe);
+
+  return 0;
+}
+
+/**
+ * gcc -g -o cp.o cp_liburing.c -luring
+ */
 int main(int argc, char *argv[]) {
   if (argc < 3) {
     printf("usage: %s <filename> <destination>\n", argv[0]);
     return 1;
+  }
+
+  int out_fd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  if (out_fd < 0) {
+    perror("open");
+    return -1;
   }
 
   struct io_uring ring;
@@ -47,8 +137,12 @@ int main(int argc, char *argv[]) {
 
   if (submit_read_request(argv[1], ring)) {
     fprintf(stderr, "cannot submit read request to iouring");
+    io_uring_queue_exit(&ring);
+
     return 1;
   }
+
+  get_completion_and_print(out_fd, ring);
 
   io_uring_queue_exit(&ring);
 

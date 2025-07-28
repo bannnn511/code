@@ -42,8 +42,8 @@ int submit_read_request(char *file_name, struct io_uring ring) {
     perror("open");
     return 1;
   }
-  int size = get_file_size(fd);
 
+  int size = get_file_size(fd);
   int blocks = size / BLOCK_SZ;
 
   if (size % BLOCK_SZ) {
