@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <liburing.h>
 #include <liburing/io_uring.h>
+#include <linux/fs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +15,8 @@
 #define BLOCK_SZ 1024
 
 struct io_data {
+  int offset;
+  int size;
   struct iovec iov;
 };
 
@@ -41,43 +44,90 @@ size_t get_file_size(int fd) {
  */
 int copy_files(struct io_uring ring, int input_fd, int output_fd) {
   size_t size = get_file_size(input_fd);
+  struct io_uring_sqe *sqe;
 
-  // while (size) {
-  size_t this_size = size < BLOCK_SZ ? size : BLOCK_SZ;
-  assert(this_size > 0);
-  size -= this_size;
+  int offset = 0;
+  int loops = 0;
+  while (size) {
+    size_t this_size = size < BLOCK_SZ ? size : BLOCK_SZ;
+    assert(this_size > 0);
 
-  struct io_uring_sqe *sqe = io_uring_get_sqe(&ring);
-  if (!sqe) {
-    return 1;
-  }
-  struct io_data *data = malloc(sizeof(struct io_data) + this_size);
-  if (!data) {
-    return 1;
-  }
-  data->iov.iov_base = data + 1;
-  data->iov.iov_len = this_size;
+    sqe = io_uring_get_sqe(&ring);
+    if (!sqe) {
+      return 1;
+    }
+    struct io_data *data = malloc(sizeof(struct io_data) + this_size);
+    if (!data) {
+      return 1;
+    }
+    data->iov.iov_base = data + 1;
+    data->iov.iov_len = this_size;
+    data->offset = offset;
+    // data->size = size;
+    printf("read: data offset %d\n", data->offset);
 
-  io_uring_prep_readv(sqe, input_fd, &data->iov, 1, 0);
-  io_uring_sqe_set_data(sqe, data);
-  io_uring_submit(&ring);
-  // }
+    io_uring_prep_readv(sqe, input_fd, &data->iov, 1, offset);
+    io_uring_sqe_set_data(sqe, data);
+    io_uring_submit(&ring);
 
-  struct io_uring_cqe *cqe;
-  int ret = io_uring_wait_cqe(&ring, &cqe);
-  if (ret < 0) {
-    fprintf(stderr, "io_uring_wait_cqe: %s\n", strerror(-ret));
-    return 1;
-  }
-
-  data = io_uring_cqe_get_data(cqe);
-  if (cqe->res < 0) {
-    fprintf(stderr, "cqe failed: %s\n", strerror(-cqe->res));
-    return 1;
+    size -= this_size;
+    offset += this_size;
+    loops++;
   }
 
-  output_to_file(output_fd, data->iov.iov_base, data->iov.iov_len);
-  io_uring_cqe_seen(&ring, cqe);
+  // printf("=== loops : %d\n", loops);
+
+  int write_loops = 0;
+  while (write_loops < loops) {
+    struct io_uring_cqe *cqe;
+    int ret = io_uring_wait_cqe(&ring, &cqe);
+    if (ret < 0) {
+      fprintf(stderr, "io_uring_wait_cqe: %s\n", strerror(-ret));
+      return 1;
+    }
+
+    struct io_data *data = io_uring_cqe_get_data(cqe);
+    if (cqe->res < 0) {
+      fprintf(stderr, "cqe failed: %s\n", strerror(-cqe->res));
+      return 1;
+    }
+
+    printf("write: data offset %d\n", data->offset);
+
+    sqe = io_uring_get_sqe(&ring);
+    io_uring_prep_writev(sqe, output_fd, &data->iov, 1, data->offset);
+    io_uring_sqe_set_data(sqe, data);
+    int submit_ret = io_uring_submit(&ring);
+    if (submit_ret < 0) {
+      fprintf(stderr, "submit write failed: %s\n", strerror(-submit_ret));
+      return 1;
+    }
+    io_uring_cqe_seen(&ring, cqe);
+
+    write_loops++;
+  }
+  printf("=== write loops : %d\n", write_loops);
+
+  // Third loop: wait for all writes to complete and free memory
+  for (int i = 0; i < loops; i++) {
+    struct io_uring_cqe *cqe;
+    int ret = io_uring_wait_cqe(&ring, &cqe);
+    if (ret < 0) {
+      fprintf(stderr, "io_uring_wait_cqe write: %s\n", strerror(-ret));
+      return 1;
+    }
+
+    struct io_data *data = io_uring_cqe_get_data(cqe);
+    if (cqe->res < 0) {
+      fprintf(stderr, "write cqe failed: %s\n", strerror(-cqe->res));
+      return 1;
+    }
+
+    printf("write completed: offset %d, bytes %d\n", data->offset, cqe->res);
+
+    free(data); // Free the allocated memory
+    io_uring_cqe_seen(&ring, cqe);
+  }
 
   return 0;
 }
