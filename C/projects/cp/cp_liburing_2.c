@@ -256,7 +256,6 @@ int copy_files2(struct io_uring ring, int input_fd, int output_fd) {
  * Executed in   14.19 secs    fish           external
  *   usr time    0.15 secs    2.35 millis    0.15 secs
  *   sys time   11.47 secs    5.06 millis   11.47 secs
-
  */
 int main(int argc, char *argv[]) {
   if (argc < 3) {
