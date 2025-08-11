@@ -7,3 +7,5 @@ venv
 *.o
 *.txt
 *.vscode
+
+big-file
