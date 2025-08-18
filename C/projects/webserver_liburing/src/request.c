@@ -69,6 +69,7 @@ int request_parse_uri(char *uri, char *filename, char *cgiargs) {
         return 1;
     } else {
         // dynamic
+        // spin.cgi?hello
         ptr = index(uri, '?');
         if (ptr) {
             strcpy(cgiargs, ptr + 1);
@@ -76,7 +77,7 @@ int request_parse_uri(char *uri, char *filename, char *cgiargs) {
         } else {
             strcpy(cgiargs, "");
         }
-        sprintf(filename, ".%s", uri);
+        sprintf(filename, "./%s", uri);
         return 0;
     }
 }
@@ -109,9 +110,9 @@ void request_serve_dynamic(int fd, char *filename, char *cgiargs) {
 
     if (fork_or_die() == 0) {
         // child
-        setenv_or_die("QUERY_STRING", cgiargs, 1); // args to cgi go here
-        dup2_or_die(fd, STDOUT_FILENO); // make cgi writes go to socket (not screen)
-        extern char **environ; // defined by libc
+        setenv_or_die("QUERY_STRING", cgiargs, 1);  // args to cgi go here
+        dup2_or_die(fd, STDOUT_FILENO);             // make cgi writes go to socket (not screen)
+        extern char **environ;                      // defined by libc
         execve_or_die(filename, argv, environ);
     } else {
         wait_or_die(NULL);
@@ -170,7 +171,6 @@ void request_handle(int fd) {
     request_read_headers(fd);
 
     is_static = request_parse_uri(uri, filename, cgiargs);
-    printf("filename:%s cgiargs:%s\n", filename, cgiargs);
     if (stat(filename, &sbuf) < 0) {
         request_error(fd, filename, "404", "Not found", "server could not find this file");
         return;

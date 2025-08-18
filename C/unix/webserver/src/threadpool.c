@@ -7,6 +7,7 @@
 #include "thread_helper.h"
 #include <pthread.h>
 #include <string.h>
+#include <stdint.h>
 
 struct worker_args {
     thread_pool *pool;
@@ -22,7 +23,6 @@ int compare_task(const void *a, const void *b);
 int pick_task(thread_pool *pool, thread_pool_task *task);
 
 void add_task(thread_pool *pool, thread_pool_task task);
-
 
 int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_size,
                      thread_pool_policy policy) {
@@ -67,7 +67,7 @@ int thread_pool_init(thread_pool *pool, const int thread_count, const int queue_
     return 0;
 }
 
-int thread_pool_add(thread_pool *pool, void (function)(void *), void *argument) {
+int thread_pool_add(thread_pool *pool, void(function)(void *), void *argument) {
     if (pool == NULL) {
         return -1;
     }
@@ -141,7 +141,8 @@ void *worker(void *arg) {
             break;
         }
         pick_task(pool, task);
-        printf("worker %d pick task %d, file_size %d\n", worker_idx, task->conn_fd, task->file_size);
+        printf("worker %d pick task %d, file_size %d\n", worker_idx, task->conn_fd,
+               task->file_size);
 
         thread_cond_signal(&pool->empty);
         thread_mutex_unlock(&pool->lock);
@@ -206,8 +207,8 @@ int compare_task(const void *a, const void *b) {
     if (a == NULL || b == NULL) {
         return 0;
     }
-    const thread_pool_task *task1 = *(thread_pool_task **) a;
-    const thread_pool_task *task2 = *(thread_pool_task **) b;
+    const thread_pool_task *task1 = *(thread_pool_task **)a;
+    const thread_pool_task *task2 = *(thread_pool_task **)b;
 
     printf("compare 2 task: %d, %d, diff %d\n", task1->file_size, task2->file_size,
            task1->file_size - task2->file_size);
@@ -226,12 +227,12 @@ void add_task(thread_pool *pool, thread_pool_task task) {
                 perror("malloc");
                 return;
             }
-            const intptr_t conn_fd = (intptr_t) task.argument;
+            const intptr_t conn_fd = (intptr_t)task.argument;
             new_task->function = task.function;
             new_task->argument = task.argument;
             new_task->file_size = check_file_size(conn_fd);
             new_task->conn_fd = conn_fd;
-            printf("add task: %d, file size: %d\n", (int) conn_fd, new_task->file_size);
+            printf("add task: %d, file size: %d\n", (int)conn_fd, new_task->file_size);
             heap_insert(pool->sff_queue, new_task);
             break;
     }
@@ -256,7 +257,7 @@ int pick_task(thread_pool *pool, thread_pool_task *task) {
                 return -1;
             }
             *task = *min_task;
-            free(min_task); // Free the allocated task
+            free(min_task);  // Free the allocated task
             printf("pick task %d, file_size %d\n", task->conn_fd, task->file_size);
             break;
     }

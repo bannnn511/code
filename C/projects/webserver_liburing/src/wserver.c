@@ -6,7 +6,6 @@
 #include <execinfo.h>
 #include <backtrace.h>
 
-
 #define QD 2
 
 char default_root[] = ".";
@@ -21,15 +20,16 @@ static void error_callback(void *data, const char *msg, int errnum) {
     fprintf(stderr, "libbacktrace error: %s (%d)\n", msg, errnum);
 }
 
-static void syminfo_callback(void *data, uintptr_t pc,
-                             const char *symname, uintptr_t symval, uintptr_t symsize) {
+static void syminfo_callback(void *data, uintptr_t pc, const char *symname, uintptr_t symval,
+                             uintptr_t symsize) {
     if (symname)
         fprintf(stderr, "    %s\n", symname);
     else
         fprintf(stderr, "    [no symbol]\n");
 }
 
-static int full_callback(void *data, uintptr_t pc, const char *filename, int lineno, const char *function) {
+static int full_callback(void *data, uintptr_t pc, const char *filename, int lineno,
+                         const char *function) {
     if (filename && function)
         fprintf(stderr, "%s:%d: %s\n", filename, lineno, function);
     else if (filename)
@@ -46,14 +46,13 @@ void sigsegv_handler(int sig) {
     int nptrs = backtrace(buffer, 100);
 
     for (int i = 0; i < nptrs; i++) {
-        uintptr_t addr = (uintptr_t) buffer[i];
+        uintptr_t addr = (uintptr_t)buffer[i];
         backtrace_syminfo(state, addr, syminfo_callback, error_callback, NULL);
         backtrace_pcinfo(state, addr, full_callback, error_callback, NULL);
     }
 
     _exit(EXIT_FAILURE);
 }
-
 
 //
 // ./wserver [-d <basedir>] [-p <portnum>]
@@ -67,8 +66,7 @@ int main(int argc, char *argv[]) {
     char *root_dir = default_root;
     int port = 10000;
 
-    while ((c = getopt(argc, argv, "d:p:")) != -1)
-        switch (c) {
+    while ((c = getopt(argc, argv, "d:p:")) != -1) switch (c) {
             case 'd':
                 root_dir = optarg;
                 break;
@@ -101,17 +99,15 @@ int main(int argc, char *argv[]) {
             perror("io_uring_get_sqe");
             continue;
         }
-        io_uring_prep_accept(sqe, listen_fd, (struct sockaddr *) &client_addr,
-                             (socklen_t *) &client_len, 0);
+        io_uring_prep_accept(sqe, listen_fd, (struct sockaddr *)&client_addr,
+                             (socklen_t *)&client_len, 0);
 
         struct request *req = malloc(sizeof(struct request));
         io_uring_sqe_set_data(sqe, req);
         io_uring_submit(&ring);
 
         struct io_uring_cqe *cqe;
-        printf("wait here\n");
         ret = io_uring_wait_cqe(&ring, &cqe);
-        printf("wait done %d\n", ret);
         if (ret < 0) {
             loops++;
             continue;
@@ -124,6 +120,7 @@ int main(int argc, char *argv[]) {
         }
 
         request_handle(cqe->res);
+        close_or_die(cqe->res);
 
         io_uring_cqe_seen(&ring, cqe);
         free(req);
