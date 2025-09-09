@@ -10,7 +10,7 @@
 #include <stdint.h>
 
 struct worker_args {
-    thread_pool *pool;
+    const thread_pool *pool;
     int id;
 };
 

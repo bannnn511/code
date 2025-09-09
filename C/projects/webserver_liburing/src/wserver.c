@@ -88,7 +88,6 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // now, get to work
     int listen_fd = open_listen_fd_or_die(port);
     int loops = 0;
     while (true && loops < 1000) {
@@ -113,7 +112,6 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        // struct io_data *data = io_uring_cqe_get_data(cqe);
         if (cqe->res < 0) {
             fprintf(stderr, "cqe failed: %s\n", strerror(-cqe->res));
             continue;
