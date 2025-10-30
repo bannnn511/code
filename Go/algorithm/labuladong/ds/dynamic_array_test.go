@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMyLinkedList(t *testing.T) {
-	arr := Constructor()
+func TestMyDynamicArray(t *testing.T) {
+	arr := NewDynamicArray()
 
 	arr.AddAtHead(1)
 	assert.Equal(t, 1, arr.array[0])
@@ -16,9 +16,9 @@ func TestMyLinkedList(t *testing.T) {
 	assert.Equal(t, 3, arr.array[1])
 }
 
-func TestMyLinkedList2(t *testing.T) {
+func TestMyDynamicArray2(t *testing.T) {
 
-	arr := Constructor()
+	arr := NewDynamicArray()
 
 	arr.AddAtHead(1)
 	assert.Equal(t, 1, arr.array[0])
@@ -27,8 +27,8 @@ func TestMyLinkedList2(t *testing.T) {
 	assert.Equal(t, 0, arr.size)
 }
 
-func TestMyLinkedList3(t *testing.T) {
-	arr := Constructor()
+func TestMyDynamicArray3(t *testing.T) {
+	arr := NewDynamicArray()
 
 	arr.AddAtHead(2)
 	arr.DeleteAtIndex(1)

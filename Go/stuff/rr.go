@@ -14,18 +14,15 @@ type Request struct {
 type Server struct {
 	Index          int
 	ReadyAfterTime int // unit: second
-
 }
 
 func RoundRobin(servers []Server, requests []Request) []Request {
 	sort.Slice(requests, func(i, j int) bool {
 		return requests[i].Index < requests[j].Index
 	})
-
 	sort.Slice(requests, func(i, j int) bool {
 		return requests[i].ArriveTime < requests[j].ArriveTime
 	})
-
 	for i := range requests {
 		server, ok := getServerReady(servers, requests[i].ArriveTime, requests[i].BurstTime)
 		if !ok {
@@ -35,7 +32,6 @@ func RoundRobin(servers []Server, requests []Request) []Request {
 		}
 
 	}
-
 	sort.Slice(requests, func(i, j int) bool {
 		return requests[i].Index < requests[j].Index
 	})
@@ -44,7 +40,6 @@ func RoundRobin(servers []Server, requests []Request) []Request {
 }
 
 func getServerReady(servers []Server, arriveTime int, burstTime int) (Server, bool) {
-
 	for i := range servers {
 		// Check if the server is ready to process the request
 		if servers[i].ReadyAfterTime <= arriveTime {

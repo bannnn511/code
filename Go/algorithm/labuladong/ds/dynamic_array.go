@@ -6,18 +6,18 @@ package ds
 
 const capacity = 1
 
-type MyLinkedList struct {
+type MyDynamicArray struct {
 	array    []int
 	size     int
 	capacity int
 }
 
-func Constructor() MyLinkedList {
+func NewDynamicArray() MyDynamicArray {
 	array := make([]int, capacity)
-	return MyLinkedList{array: array, size: 0, capacity: capacity}
+	return MyDynamicArray{array: array, size: 0, capacity: capacity}
 }
 
-func (l *MyLinkedList) Get(index int) int {
+func (l *MyDynamicArray) Get(index int) int {
 	if !l.checkElementIndex(index) {
 		return -1
 	}
@@ -25,15 +25,15 @@ func (l *MyLinkedList) Get(index int) int {
 	return l.array[index]
 }
 
-func (l *MyLinkedList) AddAtHead(val int) {
+func (l *MyDynamicArray) AddAtHead(val int) {
 	l.AddAtIndex(0, val)
 }
 
-func (l *MyLinkedList) AddAtTail(val int) {
+func (l *MyDynamicArray) AddAtTail(val int) {
 	l.AddAtIndex(l.size, val)
 }
 
-func (l *MyLinkedList) AddAtIndex(index int, val int) {
+func (l *MyDynamicArray) AddAtIndex(index int, val int) {
 	if !l.checkPositionIndex(index) {
 		return
 	}
@@ -50,7 +50,7 @@ func (l *MyLinkedList) AddAtIndex(index int, val int) {
 	l.size++
 }
 
-func (l *MyLinkedList) DeleteAtIndex(index int) {
+func (l *MyDynamicArray) DeleteAtIndex(index int) {
 	if !l.checkElementIndex(index) {
 		return
 	}
@@ -61,7 +61,7 @@ func (l *MyLinkedList) DeleteAtIndex(index int) {
 	l.size--
 }
 
-func (l *MyLinkedList) resize() {
+func (l *MyDynamicArray) resize() {
 	l.capacity *= 2
 	newArr := make([]int, l.capacity)
 	copy(newArr, l.array)
@@ -70,10 +70,10 @@ func (l *MyLinkedList) resize() {
 }
 
 // checkElementIndex returns index < size
-func (l MyLinkedList) checkElementIndex(index int) bool {
+func (l MyDynamicArray) checkElementIndex(index int) bool {
 	return index >= 0 && index < l.size
 }
 
-func (l MyLinkedList) checkPositionIndex(index int) bool {
+func (l MyDynamicArray) checkPositionIndex(index int) bool {
 	return index >= 0 && index <= l.size
 }
