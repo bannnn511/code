@@ -14,7 +14,7 @@ import (
 var pid int
 
 func stingy(money *int, loop int) {
-	for i := 0; i < loop; i++ {
+	for range loop {
 		*money += 10
 		// syscall.Kill(pid, syscall.SIGURG)
 	}
@@ -22,7 +22,7 @@ func stingy(money *int, loop int) {
 }
 
 func spendy(money *int, loop int) {
-	for i := 0; i < loop; i++ {
+	for range loop {
 		*money -= 10
 		// syscall.Kill(pid, syscall.SIGURG)
 	}
